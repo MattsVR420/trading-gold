@@ -38,8 +38,13 @@ def fvgs(df, n=80):
     return bull[-2:], bear[-2:]
 
 def send_wa(msg):
-    sid = os.environ.get('TWILIO_SID', '')
-    tok = os.environ.get('TWILIO_TOKEN', '')
+    try:
+        with open('creds.json') as f:
+            c = json.load(f)
+        sid, tok = c['sid'], c['token']
+    except Exception:
+        sid = os.environ.get('TWILIO_SID', '')
+        tok = os.environ.get('TWILIO_TOKEN', '')
     cr = base64.b64encode(f'{sid}:{tok}'.encode()).decode()
     data = urllib.parse.urlencode({
         'From': 'whatsapp:+14155238886',
