@@ -1,0 +1,47 @@
+name: XAUUSD Trading Analyse
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # elke 4u UTC: 00/04/08/12/16/20u = 02/06/10/14/18/22u Belgisch
+  workflow_dispatch:          # ook handmatig te starten
+
+permissions:
+  contents: write
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dependencies installeren
+        run: pip install yfinance pandas matplotlib --quiet
+
+      - name: Twilio credentials aanmaken
+        run: |
+          printf '{"sid":"%s","token":"%s"}' "$TWILIO_SID" "$TWILIO_TOKEN" > creds.json
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+
+      - name: Analyse uitvoeren
+        run: python run.py
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+
+      - name: Resultaten pushen naar GitHub
+        run: |
+          git config user.email "bot@mvr.be"
+          git config user.name "MVR Bot"
+          git add reports/ charts/ latest.json || true
+          git diff --cached --quiet || git commit -m "XAUUSD auto $(date -u +%Y-%m-%d_%H%M) UTC"
+          git push

@@ -268,17 +268,4 @@ try:
 except Exception as e:
     print(f'JSON fout: {e}')
 
-# === GITHUB PUSH ===
-try:
-    import subprocess
-    files = ['latest.json', rfile]
-    if cfile: files.append(cfile)
-    subprocess.run(['git', 'add'] + files, check=True)
-    msg = f'XAUUSD {dec} - {cts} UTC | Score: {score}'
-    subprocess.run(['git', 'commit', '-m', msg], check=True)
-    subprocess.run(['git', 'push', 'origin', 'main'], check=True)
-    print('GitHub: gepusht')
-except Exception as e:
-    print(f'GitHub FOUT: {e}')
-
 print('KLAAR')
