@@ -1,0 +1,57 @@
+name: XAUUSD Systeem Watchdog
+
+on:
+  schedule:
+    - cron: '30 1,5,9,13,17,21 * * *'  # Elke 4u op het halve uur (tussen de analyses)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Controleer systeem en stuur alert indien nodig
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          echo "=== XAUUSD Watchdog ==="
+          date -u
+
+          # Laatste commit ophalen
+          LAST=$(curl -s -H "Authorization: token $GH_PAT" \
+            "https://api.github.com/repos/MattsVR420/trading-gold/commits?per_page=1" \
+            | grep -o '"date":"[^"]*"' | head -1 | cut -d'"' -f4)
+          echo "Laatste commit: $LAST"
+
+          # Uren geleden berekenen
+          NOW=$(date -u +%s)
+          COMMIT_TS=$(date -u -d "$LAST" +%s 2>/dev/null || echo 0)
+          UREN=$(( (NOW - COMMIT_TS) / 3600 ))
+          echo "Uren geleden: $UREN"
+
+          if [ "$UREN" -gt 5 ]; then
+            echo "ALERT: Systeem $UREN uur zonder update!"
+
+            # WhatsApp alert sturen
+            curl -s -X POST \
+              "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json" \
+              -u "$TWILIO_SID:$TWILIO_TOKEN" \
+              --data-urlencode "From=whatsapp:+14155238886" \
+              --data-urlencode "To=whatsapp:+32497939310" \
+              --data-urlencode "Body=XAUUSD SYSTEEM ALERT: Geen update ontvangen in ${UREN}u. Systeem wordt automatisch herstart."
+            echo "WhatsApp alert verstuurd"
+
+            # Analyse automatisch herstarten
+            curl -s -X POST \
+              -H "Authorization: token $GH_PAT" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/MattsVR420/trading-gold/actions/workflows/trading-analysis.yml/dispatches" \
+              -d '{"ref":"main"}'
+            echo "Analyse workflow herstart"
+          else
+            echo "Systeem OK - laatste update $UREN uur geleden"
+          fi
