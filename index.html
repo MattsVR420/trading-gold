@@ -3,95 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MVR Trading — XAUUSD Dashboard</title>
+<title>MVR Trading — XAUUSD Live Dashboard</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:#0b1929; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; }
 
-  header { background:#0d2137; border-bottom:1px solid #1e3a5f; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
-  .logo { font-size:18px; font-weight:700; color:#ffd234; letter-spacing:1px; }
-  .logo span { color:#9e9e9e; font-weight:400; font-size:13px; margin-left:8px; }
-  .refresh-btn { background:#1e3a5f; border:1px solid #2a5a8f; color:#7ab8f5; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
+  header { background:#0d2137; border-bottom:1px solid #1e3a5f; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
+  .logo { font-size:17px; font-weight:700; color:#ffd234; letter-spacing:1px; }
+  .logo span { color:#9e9e9e; font-weight:400; font-size:12px; margin-left:8px; }
+  .header-right { display:flex; align-items:center; gap:10px; }
+  .refresh-btn { background:#1e3a5f; border:1px solid #2a5a8f; color:#7ab8f5; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
   .refresh-btn:hover { background:#2a5a8f; color:#fff; }
+  .live-dot { width:8px; height:8px; background:#26a69a; border-radius:50%; display:inline-block; animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
 
-  .container { max-width:900px; margin:0 auto; padding:20px 16px; }
+  .container { max-width:900px; margin:0 auto; padding:16px; }
+
+  /* Live prijs banner */
+  .live-banner { background:#0d2137; border:1px solid #1e3a5f; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .live-price-block { display:flex; align-items:baseline; gap:10px; }
+  .live-label { font-size:11px; color:#9e9e9e; text-transform:uppercase; letter-spacing:1px; }
+  .live-price { font-size:32px; font-weight:700; color:#fff; }
+  .live-change { font-size:14px; font-weight:600; }
+  .live-change.up { color:#26a69a; }
+  .live-change.down { color:#ef5350; }
+  .live-meta { text-align:right; }
+  .live-time { font-size:11px; color:#9e9e9e; }
+  .live-source { font-size:10px; color:#3a5a7f; margin-top:2px; }
 
   /* Status card */
-  .status-card { border-radius:12px; padding:20px; margin-bottom:20px; border:1px solid; }
+  .status-card { border-radius:12px; padding:18px; margin-bottom:16px; border:1px solid; }
   .status-card.long  { background:#0d2e1a; border-color:#26a69a; }
   .status-card.short { background:#2e0d0d; border-color:#ef5350; }
   .status-card.wacht { background:#1a1a0d; border-color:#ffd234; }
   .status-card.loading { background:#111e2e; border-color:#1e3a5f; }
 
   .status-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
-  .beslissing { font-size:28px; font-weight:700; }
+  .beslissing { font-size:26px; font-weight:700; }
   .beslissing.long  { color:#26a69a; }
   .beslissing.short { color:#ef5350; }
   .beslissing.wacht { color:#ffd234; }
-  .prijs { font-size:22px; font-weight:600; color:#fff; }
+  .analyse-prijs { font-size:18px; font-weight:600; color:#aaa; }
   .score-badge { background:#1e3a5f; color:#7ab8f5; padding:4px 12px; border-radius:20px; font-size:13px; }
-  .timestamp { color:#9e9e9e; font-size:12px; margin-top:8px; }
+  .timestamp { color:#9e9e9e; font-size:11px; margin-top:8px; }
 
-  /* Trade levels */
-  .levels-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:16px; }
-  .level-box { background:#0b1929; border-radius:8px; padding:12px 14px; border:1px solid #1e3a5f; }
-  .level-label { font-size:11px; color:#9e9e9e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
-  .level-value { font-size:18px; font-weight:700; }
+  .levels-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:14px; }
+  .level-box { background:#0b1929; border-radius:8px; padding:10px 14px; border:1px solid #1e3a5f; }
+  .level-label { font-size:10px; color:#9e9e9e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px; }
+  .level-value { font-size:17px; font-weight:700; }
   .level-value.entry { color:#ffffff; }
   .level-value.sl     { color:#ef5350; }
   .level-value.tp1    { color:#66bb6a; }
   .level-value.tp2    { color:#66bb6a; }
 
   /* Chart */
-  .chart-section { margin-bottom:20px; }
-  .section-title { font-size:13px; color:#9e9e9e; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+  .chart-section { margin-bottom:16px; }
+  .section-title { font-size:11px; color:#9e9e9e; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
   .chart-img { width:100%; border-radius:10px; border:1px solid #1e3a5f; display:block; }
-  .no-chart { background:#111e2e; border:1px solid #1e3a5f; border-radius:10px; padding:40px; text-align:center; color:#9e9e9e; font-size:13px; }
+  .no-chart { background:#111e2e; border:1px solid #1e3a5f; border-radius:10px; padding:30px; text-align:center; color:#9e9e9e; font-size:13px; }
 
   /* Trend */
-  .trend-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .trend-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
   .trend-box { background:#111e2e; border-radius:8px; padding:12px; text-align:center; border:1px solid #1e3a5f; }
-  .trend-tf { font-size:11px; color:#9e9e9e; margin-bottom:6px; }
-  .trend-val { font-size:13px; font-weight:600; }
+  .trend-tf { font-size:10px; color:#9e9e9e; margin-bottom:6px; text-transform:uppercase; }
+  .trend-val { font-size:12px; font-weight:600; }
   .trend-val.bullish { color:#26a69a; }
   .trend-val.bearish { color:#ef5350; }
   .trend-val.neutraal { color:#ffd234; }
 
   /* History */
-  .history-list { display:flex; flex-direction:column; gap:8px; }
-  .history-item { background:#111e2e; border-radius:8px; padding:12px 14px; border:1px solid #1e3a5f; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
-  .history-time { color:#9e9e9e; font-size:12px; }
-  .history-price { color:#e0e0e0; font-size:14px; font-weight:600; }
-  .history-dec { font-size:13px; font-weight:700; padding:3px 10px; border-radius:12px; }
+  .history-list { display:flex; flex-direction:column; gap:6px; }
+  .history-item { background:#111e2e; border-radius:8px; padding:10px 14px; border:1px solid #1e3a5f; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+  .history-time { color:#9e9e9e; font-size:11px; }
+  .history-price { color:#e0e0e0; font-size:13px; font-weight:600; }
+  .history-dec { font-size:12px; font-weight:700; padding:2px 10px; border-radius:12px; }
   .history-dec.long  { background:#0d2e1a; color:#26a69a; }
   .history-dec.short { background:#2e0d0d; color:#ef5350; }
   .history-dec.wacht { background:#1a1a0d; color:#ffd234; }
 
-  /* Footer */
-  footer { text-align:center; color:#9e9e9e; font-size:11px; padding:30px 20px; border-top:1px solid #1e3a5f; margin-top:20px; }
+  footer { text-align:center; color:#9e9e9e; font-size:11px; padding:24px 20px; border-top:1px solid #1e3a5f; margin-top:16px; }
   footer a { color:#7ab8f5; text-decoration:none; }
-
-  .loading-txt { color:#9e9e9e; font-size:14px; text-align:center; padding:40px; }
+  .loading-txt { color:#9e9e9e; font-size:13px; text-align:center; padding:30px; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">MVR Trading <span>XAUUSD • Gold</span></div>
-  <button class="refresh-btn" onclick="location.reload()">↻ Vernieuwen</button>
+  <div class="header-right">
+    <span class="live-dot"></span>
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
 </header>
 
 <div class="container">
 
-  <!-- LATEST STATUS -->
+  <!-- LIVE PRIJS -->
+  <div class="live-banner">
+    <div class="live-price-block">
+      <div>
+        <div class="live-label">⚡ Live Goudprijs (XAU/USD)</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px;">
+          <div class="live-price" id="live-price">—</div>
+          <div class="live-change" id="live-change"></div>
+        </div>
+      </div>
+    </div>
+    <div class="live-meta">
+      <div class="live-time" id="live-time">Laden...</div>
+      <div class="live-source">Bijgewerkt elke 30s</div>
+    </div>
+  </div>
+
+  <!-- LAATSTE ANALYSE -->
+  <div class="section-title" style="margin-bottom:8px">Laatste 4H Analyse</div>
   <div id="status-card" class="status-card loading">
-    <p class="loading-txt">Laatste analyse laden...</p>
+    <p class="loading-txt">Analyse laden...</p>
   </div>
 
   <!-- CHART -->
   <div class="chart-section">
     <div class="section-title">4H Grafiek</div>
-    <div id="chart-container"><div class="no-chart">Grafiek wordt geladen...</div></div>
+    <div id="chart-container"><div class="no-chart">Grafiek laden...</div></div>
   </div>
 
   <!-- TREND -->
@@ -103,20 +136,68 @@
   </div>
 
   <!-- HISTORY -->
-  <div class="section-title" style="margin-bottom:10px">Laatste Updates</div>
+  <div class="section-title" style="margin-bottom:8px">Analysegeschiedenis</div>
   <div class="history-list" id="history-list">
-    <div class="loading-txt">Geschiedenis laden...</div>
+    <div class="loading-txt">Laden...</div>
   </div>
 
 </div>
 
 <footer>
-  MVR Trading Agent • Auto-update elke 4 uur •
-  <a href="https://github.com/MattsVR420/trading-gold" target="_blank">GitHub Repo</a>
+  MVR Trading Agent • Analyse elke 4u • Live prijs elke 30s •
+  <a href="https://github.com/MattsVR420/trading-gold" target="_blank">GitHub</a>
 </footer>
 
 <script>
-// Laad data uit latest.json
+let prevPrice = null;
+
+// === LIVE PRIJS (elke 30 seconden) ===
+async function loadLivePrice() {
+  const apis = [
+    {
+      url: 'https://api.metals.live/v1/spot/gold',
+      parse: d => ({ price: parseFloat(d[0]?.price || d?.price || 0), ok: true })
+    },
+    {
+      url: 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1m&range=1d',
+      parse: d => {
+        const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        return { price: parseFloat(p || 0), ok: !!p };
+      }
+    }
+  ];
+
+  for (const api of apis) {
+    try {
+      const r = await fetch(api.url, { cache: 'no-store' });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const { price, ok } = api.parse(d);
+      if (!ok || price < 100) continue;
+
+      const el = document.getElementById('live-price');
+      const chEl = document.getElementById('live-change');
+      const timeEl = document.getElementById('live-time');
+
+      if (prevPrice !== null) {
+        const diff = price - prevPrice;
+        const pct = ((diff / prevPrice) * 100).toFixed(2);
+        const sign = diff >= 0 ? '+' : '';
+        chEl.textContent = `${sign}$${diff.toFixed(1)} (${sign}${pct}%)`;
+        chEl.className = 'live-change ' + (diff >= 0 ? 'up' : 'down');
+      }
+
+      el.textContent = '$' + price.toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      prevPrice = price;
+
+      const now = new Date();
+      timeEl.textContent = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (lokaal)';
+      return;
+    } catch(e) {}
+  }
+}
+
+// === ANALYSE DATA (elke 5 minuten) ===
 async function loadDashboard() {
   try {
     const r = await fetch('latest.json?t=' + Date.now());
@@ -124,14 +205,13 @@ async function loadDashboard() {
     const d = await r.json();
 
     const dec = (d.beslissing || 'WACHT').toUpperCase();
-    const cls = dec.includes('LONG') ? 'long' : dec.includes('SHORT') ? 'short' : 'wacht';
+    const cls = dec === 'LONG' ? 'long' : dec === 'SHORT' ? 'short' : 'wacht';
 
-    // Status card
     document.getElementById('status-card').className = `status-card ${cls}`;
     document.getElementById('status-card').innerHTML = `
       <div class="status-top">
         <div class="beslissing ${cls}">${dec}</div>
-        <div class="prijs">$${d.prijs || '—'}</div>
+        <div class="analyse-prijs">Analyse op $${d.prijs || '—'}</div>
         <div class="score-badge">Score: ${d.score >= 0 ? '+' : ''}${d.score || 0}</div>
       </div>
       <div class="timestamp">Laatste analyse: ${d.tijdstip || '—'} UTC</div>
@@ -141,29 +221,30 @@ async function loadDashboard() {
         <div class="level-box"><div class="level-label">Stop Loss</div><div class="level-value sl">$${d.sl || '—'}</div></div>
         <div class="level-box"><div class="level-label">TP1 (1:1.5)</div><div class="level-value tp1">$${d.tp1 || '—'}</div></div>
         <div class="level-box"><div class="level-label">TP2 (1:3)</div><div class="level-value tp2">$${d.tp2 || '—'}</div></div>
-      </div>` : '<div style="margin-top:12px;color:#9e9e9e;font-size:13px">Geen actieve trade — wacht op betere confluëntie.</div>'}
+      </div>` : `<div style="margin-top:10px;color:#9e9e9e;font-size:12px">Geen actieve trade — wacht op confluëntie (score ${d.score >= 0 ? '+' : ''}${d.score}).</div>`}
     `;
 
-    // Chart
     if (d.chart) {
       document.getElementById('chart-container').innerHTML =
-        `<img src="${d.chart}?t=${Date.now()}" class="chart-img" alt="XAUUSD Chart" onerror="this.parentElement.innerHTML='<div class=no-chart>Grafiek tijdelijk niet beschikbaar</div>'">`;
+        `<img src="${d.chart}?t=${Date.now()}" class="chart-img" alt="XAUUSD Chart"
+          onerror="this.parentElement.innerHTML='<div class=no-chart>Grafiek tijdelijk niet beschikbaar</div>'">`;
     }
 
-    // Trend
-    const trends = ['wt','dt','h4t'];
-    const vals = [d.weekly_trend, d.daily_trend, d.h4_trend];
-    trends.forEach((id, i) => {
+    const trendData = [
+      { id: 'wt', val: d.weekly_trend },
+      { id: 'dt', val: d.daily_trend },
+      { id: 'h4t', val: d.h4_trend }
+    ];
+    trendData.forEach(({ id, val }) => {
       const el = document.getElementById(id);
-      const v = (vals[i] || 'NEUTRAAL').toUpperCase();
+      const v = (val || 'NEUTRAAL').toUpperCase();
       el.textContent = v.includes('BULL') ? '▲ BULLISH' : v.includes('BEAR') ? '▼ BEARISH' : '→ NEUTRAAL';
       el.className = 'trend-val ' + (v.includes('BULL') ? 'bullish' : v.includes('BEAR') ? 'bearish' : 'neutraal');
     });
 
-    // History
     if (d.history && d.history.length) {
-      document.getElementById('history-list').innerHTML = d.history.slice(0,8).map(h => {
-        const hcls = (h.beslissing||'').includes('LONG') ? 'long' : (h.beslissing||'').includes('SHORT') ? 'short' : 'wacht';
+      document.getElementById('history-list').innerHTML = d.history.slice(0, 10).map(h => {
+        const hcls = (h.beslissing || '').includes('LONG') ? 'long' : (h.beslissing || '').includes('SHORT') ? 'short' : 'wacht';
         return `<div class="history-item">
           <span class="history-time">${h.tijdstip} UTC</span>
           <span class="history-price">$${h.prijs}</span>
@@ -171,16 +252,21 @@ async function loadDashboard() {
         </div>`;
       }).join('');
     }
-
   } catch(e) {
     document.getElementById('status-card').innerHTML =
-      `<p style="color:#9e9e9e;padding:10px">Data nog niet beschikbaar. De eerste analyse volgt automatisch.<br><br><small>${e.message}</small></p>`;
+      `<p style="color:#9e9e9e;padding:10px;font-size:13px">Analyse even niet beschikbaar.<br><small>${e.message}</small></p>`;
   }
 }
 
-loadDashboard();
-// Auto-refresh elke 5 minuten
-setInterval(() => loadDashboard(), 300000);
+function loadAll() {
+  loadLivePrice();
+  loadDashboard();
+}
+
+// Start
+loadAll();
+setInterval(loadLivePrice, 30000);   // live prijs elke 30s
+setInterval(loadDashboard, 300000);  // analyse elke 5 min
 </script>
 </body>
 </html>
