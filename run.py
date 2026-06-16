@@ -62,7 +62,7 @@ def send_wa(msg):
 
 # === DATA OPHALEN ===
 print('Data ophalen...')
-gold = yf.Ticker('XAUUSD=X')  # spot goud, zelfde markt als MT4/XAUUSD
+gold = yf.Ticker('GC=F')  # COMEX gold futures, beste proxy voor XAUUSD op Yahoo Finance
 weekly = gold.history(period='1y', interval='1wk')
 daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
