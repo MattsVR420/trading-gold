@@ -62,7 +62,7 @@ def send_wa(msg):
 
 # === DATA OPHALEN ===
 print('Data ophalen...')
-gold = yf.Ticker('GC=F')
+gold = yf.Ticker('XAUUSD=X')  # spot goud, zelfde markt als MT4/XAUUSD
 weekly = gold.history(period='1y', interval='1wk')
 daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
@@ -267,5 +267,18 @@ try:
     print('latest.json bijgewerkt')
 except Exception as e:
     print(f'JSON fout: {e}')
+
+# === GITHUB PUSH ===
+try:
+    import subprocess
+    files = ['latest.json', rfile]
+    if cfile: files.append(cfile)
+    subprocess.run(['git', 'add'] + files, check=True)
+    msg = f'XAUUSD {dec} - {cts} UTC | Score: {score}'
+    subprocess.run(['git', 'commit', '-m', msg], check=True)
+    subprocess.run(['git', 'push', 'origin', 'main'], check=True)
+    print('GitHub: gepusht')
+except Exception as e:
+    print(f'GitHub FOUT: {e}')
 
 print('KLAAR')
