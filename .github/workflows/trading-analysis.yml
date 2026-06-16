@@ -2,8 +2,13 @@ name: XAUUSD Trading Analyse
 
 on:
   schedule:
-    - cron: '0 */4 * * *'   # elke 4u UTC: 00/04/08/12/16/20u = 02/06/10/14/18/22u Belgisch
-  workflow_dispatch:          # ook handmatig te starten
+    # Basis: elke 4u (02/06/10/14/18/22u Belgisch)
+    - cron: '0 */4 * * *'
+    # Prime time weekdagen: elk uur van 14u-18u Belgisch (12-16u UTC)
+    - cron: '0 12,13,14,15,16 * * 1-5'
+    # Londen open: 09u Belgisch (07u UTC) op weekdagen
+    - cron: '0 7 * * 1-5'
+  workflow_dispatch:
 
 permissions:
   contents: write
