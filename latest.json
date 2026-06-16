@@ -38,23 +38,5 @@
       "beslissing": "SHORT",
       "score": -4
     },
-    {
-      "tijdstip": "2026-06-15 12:08",
-      "prijs": 3319,
-      "beslissing": "WACHT",
-      "score": 2
-    },
-    {
-      "tijdstip": "2026-06-15 08:06",
-      "prijs": 3323,
-      "beslissing": "LONG",
-      "score": 5
-    },
-    {
-      "tijdstip": "2026-06-15 00:12",
-      "prijs": 3310,
-      "beslissing": "WACHT",
-      "score": 0
-    }
   ]
 }
