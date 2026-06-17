@@ -1,8 +1,8 @@
 {
-  "tijdstip": "2026-06-17 17:41",
-  "prijs": 4383,
+  "tijdstip": "2026-06-17 19:51",
+  "prijs": 4248,
   "beslissing": "WACHT",
-  "score": 0,
+  "score": -1,
   "entry": null,
   "sl": null,
   "tp1": null,
@@ -12,8 +12,14 @@
   "h4_trend": "NEUTRAAL",
   "fib50": 4718,
   "fib618": 4556,
-  "chart": "charts/2026-06-17_1741_XAUUSD.png",
+  "chart": "charts/2026-06-17_1951_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-06-17 19:51",
+      "prijs": 4248,
+      "beslissing": "WACHT",
+      "score": -1
+    },
     {
       "tijdstip": "2026-06-17 17:41",
       "prijs": 4383,
