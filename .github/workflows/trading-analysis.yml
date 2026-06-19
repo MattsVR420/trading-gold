@@ -4,11 +4,9 @@ on:
   schedule:
     # Basis: elke 4u (02/06/10/14/18/22u Belgisch)
     - cron: '0 */4 * * *'
-    # Ochtend voorbereiding: 08u Belgisch (06u UTC) weekdagen
-    - cron: '0 6 * * 1-5'
-    # Londen open: 09u Belgisch (07u UTC) weekdagen
-    - cron: '0 7 * * 1-5'
-    # Prime time weekdagen: elk uur 14-18u Belgisch (12-16u UTC)
+    # Ochtend elk uur 08-13u Belgisch (06-11u UTC) weekdagen
+    - cron: '0 6,7,8,9,10,11 * * 1-5'
+    # Prime time elk uur 14-18u Belgisch (12-16u UTC) weekdagen
     - cron: '0 12,13,14,15,16 * * 1-5'
     # Zondagavond: markt herstart na weekend (23u Belgisch = 21u UTC)
     - cron: '0 21 * * 0'
