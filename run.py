@@ -113,8 +113,11 @@ ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
 print(f'Prijs: ${price} | Beslissing: {dec} | Score: {score}')
 
 # === WHATSAPP (altijd eerst) ===
+urgent = abs(score) >= 4
 if dec in ('LONG', 'SHORT'):
+    urgent_label = '🚨 URGENT — DIRECT INSTAPPE 🚨\n\n' if urgent else ''
     wa_msg = (
+        f'{urgent_label}'
         f'XAUUSD {ts} UTC\n\n'
         f'Prijs: ${price}\n'
         f'Beslissing: {dec} (Score: {score})\n\n'
@@ -267,5 +270,30 @@ try:
     print('latest.json bijgewerkt')
 except Exception as e:
     print(f'JSON fout: {e}')
+
+# === DAGBOEK AUTO-LOG (alleen bij LONG/SHORT) ===
+if dec in ('LONG', 'SHORT'):
+    try:
+        dagboek_dir = 'dagboek traden/trades'
+        os.makedirs(dagboek_dir, exist_ok=True)
+        dag_ts = datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M')
+        dag_file = f'{dagboek_dir}/{dag_ts}_{dec}_signaal.md'
+        with open(dag_file, 'w', encoding='utf-8') as df:
+            df.write(f'# Signaal — {dag_ts} UTC\n\n')
+            df.write(f'## Setup\n')
+            df.write(f'- **Richting:** {dec}\n')
+            df.write(f'- **Score:** {score}{"  ← URGENT" if urgent else ""}\n')
+            df.write(f'- **Prijs bij signaal:** ${price}\n')
+            df.write(f'- **Entry:** ${entry} | **SL:** ${sl} | **TP1:** ${tp1} | **TP2:** ${tp2}\n\n')
+            df.write(f'## Marktcontext\n')
+            df.write(f'- Weekly: {wt} | Daily: {dt} | 4H: {h4t}\n')
+            df.write(f'- Fib 50%: ${fib50} | Fib 61.8%: ${fib618}\n\n')
+            df.write(f'## Resultaat\n')
+            df.write(f'- **Uitkomst:** _(in te vullen: WIN/VERLIES/GEMIST)_\n')
+            df.write(f'- **R-multiple:** _(bijv. +2R)_\n\n')
+            df.write(f'## Les\n_(in te vullen na trade)_\n')
+        print(f'Dagboek: {dag_file}')
+    except Exception as e:
+        print(f'Dagboek fout: {e}')
 
 print('KLAAR')
