@@ -8,6 +8,8 @@ on:
     - cron: '0 6,7,8,9,10,11 * * 1-5'
     # Prime time elk uur 14-18u Belgisch (12-16u UTC) weekdagen
     - cron: '0 12,13,14,15,16 * * 1-5'
+    # Avond elk uur 19-21u Belgisch (17-19u UTC) weekdagen
+    - cron: '0 17,18,19 * * 1-5'
     # Zondagavond: markt herstart na weekend (23u Belgisch = 21u UTC)
     - cron: '0 21 * * 0'
   workflow_dispatch:
