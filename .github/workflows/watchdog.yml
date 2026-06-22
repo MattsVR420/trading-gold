@@ -2,8 +2,8 @@ name: XAUUSD Systeem Watchdog
 
 on:
   schedule:
-    # 24/7 bewaking: elk uur op het halve uur
-    - cron: '30 * * * *'
+    # Primaire motor: elke 30 min — triggert analyse als GitHub cron het laat afweten
+    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +13,7 @@ jobs:
   watchdog:
     runs-on: ubuntu-latest
     steps:
-      - name: Controleer systeem en stuur alert indien nodig
+      - name: Controleer systeem en trigger analyse indien nodig
         env:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
@@ -22,46 +22,66 @@ jobs:
           echo "=== XAUUSD Watchdog ==="
           date -u
 
-          # Laatste commit ophalen via jq voor betrouwbare parsing
+          # Laatste commit ophalen
           RESPONSE=$(curl -s -H "Authorization: token $GH_PAT" \
             "https://api.github.com/repos/MattsVR420/trading-gold/commits?per_page=1")
           LAST=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'])" 2>/dev/null || echo "")
           echo "Laatste commit: $LAST"
 
-          # Uren geleden berekenen — val terug op 0 als datum ongeldig
           NOW=$(date -u +%s)
           if [ -z "$LAST" ]; then
             COMMIT_TS=0
-            UREN=999
+            MINUTEN=999
           else
             COMMIT_TS=$(date -u -d "$LAST" +%s 2>/dev/null || echo 0)
             if [ "$COMMIT_TS" -eq 0 ]; then
-              UREN=999
+              MINUTEN=999
             else
-              UREN=$(( (NOW - COMMIT_TS) / 3600 ))
+              MINUTEN=$(( (NOW - COMMIT_TS) / 60 ))
             fi
           fi
-          echo "Uren geleden: $UREN"
+          echo "Minuten geleden: $MINUTEN"
 
-          if [ "$UREN" -gt 5 ]; then
-            echo "ALERT: Systeem $UREN uur zonder update!"
+          # Sessie-uren (UTC): sessie1=22-09u, break=10-12u, sessie2=13-21u
+          HOUR=$(date -u +%-H)
+          IN_SESSION=false
+          if [ "$HOUR" -ge 22 ] || [ "$HOUR" -le 9 ] || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 21 ] ); then
+            IN_SESSION=true
+          fi
+          echo "In sessie: $IN_SESSION (UTC uur: $HOUR)"
 
-            # WhatsApp alert sturen
-            curl -s -X POST \
-              "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json" \
-              -u "$TWILIO_SID:$TWILIO_TOKEN" \
-              --data-urlencode "From=whatsapp:+14155238886" \
-              --data-urlencode "To=whatsapp:+32497939310" \
-              --data-urlencode "Body=XAUUSD SYSTEEM ALERT: Geen update ontvangen in ${UREN}u. Systeem wordt automatisch herstart."
-            echo "WhatsApp alert verstuurd"
+          if [ "$IN_SESSION" = "true" ] && [ "$MINUTEN" -gt 35 ]; then
+            echo "Analyse $MINUTEN min geleden — nu triggeren!"
 
-            # Analyse automatisch herstarten
+            # WhatsApp alert alleen als echt lang (>90 min)
+            if [ "$MINUTEN" -gt 90 ]; then
+              curl -s -X POST \
+                "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json" \
+                -u "$TWILIO_SID:$TWILIO_TOKEN" \
+                --data-urlencode "From=whatsapp:+14155238886" \
+                --data-urlencode "To=whatsapp:+32497939310" \
+                --data-urlencode "Body=XAUUSD ALERT: Geen analyse in ${MINUTEN} min. Wordt nu herstart."
+              echo "WhatsApp alert verstuurd"
+            fi
+
+            # Analyse triggeren via workflow_dispatch
             curl -s -X POST \
               -H "Authorization: token $GH_PAT" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/MattsVR420/trading-gold/actions/workflows/trading-analysis.yml/dispatches" \
               -d '{"ref":"main"}'
-            echo "Analyse workflow herstart"
+            echo "Analyse getriggerd"
+
+          elif [ "$IN_SESSION" = "false" ] && [ "$MINUTEN" -gt 300 ]; then
+            echo "ALERT buiten sessie: $MINUTEN min zonder update!"
+            curl -s -X POST \
+              "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json" \
+              -u "$TWILIO_SID:$TWILIO_TOKEN" \
+              --data-urlencode "From=whatsapp:+14155238886" \
+              --data-urlencode "To=whatsapp:+32497939310" \
+              --data-urlencode "Body=XAUUSD ALERT: Systeem ${MINUTEN} min zonder update (buiten sessie)."
+            echo "WhatsApp alert verstuurd"
+
           else
-            echo "Systeem OK - laatste update $UREN uur geleden"
+            echo "Systeem OK — laatste analyse $MINUTEN min geleden"
           fi
