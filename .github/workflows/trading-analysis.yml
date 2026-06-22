@@ -8,10 +8,10 @@ on:
     - cron: '0 6,7,8,9,10,11 * * 1-5'
     # Prime time elk uur 14-18u Belgisch (12-16u UTC) weekdagen
     - cron: '0 12,13,14,15,16 * * 1-5'
-    # Avond elk uur 19-21u Belgisch (17-19u UTC) weekdagen
-    - cron: '0 17,18,19 * * 1-5'
-    # Zondagavond: markt herstart + elk uur tot middernacht (21-23u UTC = 23u-01u Belgisch)
-    - cron: '0 21,22,23 * * 0'
+    # Avond elk half uur 17-22u Belgisch (15-20u UTC) weekdagen
+    - cron: '0,30 15,16,17,18,19,20 * * 1-5'
+    # Zondagavond: markt herstart + elk half uur tot middernacht (21-23u UTC = 23u-01u Belgisch)
+    - cron: '0,30 21,22,23 * * 0'
     # Vroege maandag: elk uur 00-05u UTC (02-07u Belgisch) voor continuïteit na weekend
     - cron: '0 1,2,3,5 * * 1'
   workflow_dispatch:

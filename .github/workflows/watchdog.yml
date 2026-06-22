@@ -2,10 +2,8 @@ name: XAUUSD Systeem Watchdog
 
 on:
   schedule:
-    # Basis: elke 4u op het halve uur (tussen analyses door)
-    - cron: '30 1,5,9,11,13,17,21 * * *'
-    # Prime time weekdagen: elk half uur controleren tussen 14-18u Belgisch (12-16u UTC)
-    - cron: '30 12,13,14,15 * * 1-5'
+    # 24/7 bewaking: elk uur op het halve uur
+    - cron: '30 * * * *'
   workflow_dispatch:
 
 permissions:
