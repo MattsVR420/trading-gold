@@ -2,9 +2,8 @@ name: XAUUSD Trading Analyse
 
 on:
   schedule:
-    # SESSIE 1: Markt open 00:00 CEST (22:00 UTC) → 12:00 CEST (10:00 UTC), elk 30 min
-    - cron: '0,30 22,23 * * *'
-    - cron: '0,30 0,1,2,3,4,5,6,7,8,9 * * *'
+    # SESSIE 1: 06:00 CEST (04:00 UTC) → 12:00 CEST (10:00 UTC), elk 30 min
+    - cron: '0,30 4,5,6,7,8,9 * * *'
     - cron: '0 10 * * *'
     # SESSIE 2: 15:00 CEST (13:00 UTC) → 23:00 CEST (21:00 UTC), elk 30 min
     - cron: '0,30 13,14,15,16,17,18,19,20 * * *'
@@ -62,7 +61,7 @@ jobs:
         run: |
           HOUR=$(date -u +%-H)
           IN_SESSION=false
-          if [ "$HOUR" -ge 22 ] || [ "$HOUR" -le 9 ] || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 21 ] ); then
+          if ( [ "$HOUR" -ge 4 ] && [ "$HOUR" -le 10 ] ) || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 21 ] ); then
             IN_SESSION=true
           fi
           if [ "$IN_SESSION" = "false" ]; then
