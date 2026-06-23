@@ -68,20 +68,40 @@ daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 
-# Live spot prijs via metals.live (zelfde bron als dashboard = zelfde als MT5)
+# Live spot prijs: 3 bronnen in volgorde van voorkeur
+price = None
+
+# Bron 1: XAUUSD=X via yfinance (echte spot)
 try:
-    req = urllib.request.Request(
-        'https://api.metals.live/v1/spot/gold',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    resp = urllib.request.urlopen(req, timeout=10)
-    data = json.loads(resp.read())
-    raw = data[0]['price'] if isinstance(data, list) else data['price']
-    price = round(float(raw), 0)
-    print(f'Live spot prijs: ${price}')
+    spot = yf.Ticker('XAUUSD=X')
+    spot_h = spot.history(period='1d', interval='1m')
+    if not spot_h.empty:
+        price = round(float(spot_h['Close'].iloc[-1]), 0)
+        print(f'Spot prijs via XAUUSD=X: ${price}')
 except Exception as e:
+    print(f'XAUUSD=X gefaald: {e}')
+
+# Bron 2: metals.live met SSL bypass
+if price is None:
+    try:
+        import ssl
+        ctx = ssl._create_unverified_context()
+        req = urllib.request.Request(
+            'https://api.metals.live/v1/spot/gold',
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        resp = urllib.request.urlopen(req, context=ctx, timeout=10)
+        data = json.loads(resp.read())
+        raw = data[0]['price'] if isinstance(data, list) else data['price']
+        price = round(float(raw), 0)
+        print(f'Spot prijs via metals.live: ${price}')
+    except Exception as e:
+        print(f'metals.live gefaald: {e}')
+
+# Bron 3: GC=F h1 close (futures fallback)
+if price is None:
     price = round(float(h1['Close'].iloc[-1]), 0)
-    print(f'metals.live gefaald ({e}) — gebruik h1 close: ${price}')
+    print(f'Fallback GC=F futures prijs: ${price}')
 wt  = trend(weekly)
 dt  = trend(daily)
 h4t = trend(h4)
