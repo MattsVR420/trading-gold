@@ -62,13 +62,26 @@ def send_wa(msg):
 
 # === DATA OPHALEN ===
 print('Data ophalen...')
-gold = yf.Ticker('GC=F')  # COMEX gold futures, beste proxy voor XAUUSD op Yahoo Finance
+gold = yf.Ticker('GC=F')  # GC=F voor trend/structuur analyse
 weekly = gold.history(period='1y', interval='1wk')
 daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 
-price = round(float(daily['Close'].iloc[-1]), 0)
+# Live spot prijs via metals.live (zelfde bron als dashboard = zelfde als MT5)
+try:
+    req = urllib.request.Request(
+        'https://api.metals.live/v1/spot/gold',
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
+    resp = urllib.request.urlopen(req, timeout=10)
+    data = json.loads(resp.read())
+    raw = data[0]['price'] if isinstance(data, list) else data['price']
+    price = round(float(raw), 0)
+    print(f'Live spot prijs: ${price}')
+except Exception as e:
+    price = round(float(h1['Close'].iloc[-1]), 0)
+    print(f'metals.live gefaald ({e}) — gebruik h1 close: ${price}')
 wt  = trend(weekly)
 dt  = trend(daily)
 h4t = trend(h4)
