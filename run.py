@@ -68,33 +68,42 @@ daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 
-# Live spot prijs: 3 bronnen in volgorde van voorkeur
+# Live spot prijs: meerdere bronnen in volgorde van voorkeur
 import requests as _req
 price = None
 
-# Bron 1: goldprice.org spot API (betrouwbaar, geen SSL issues)
+# Bron 1: gold-api.com — real-time OTC spot, dicht bij MT5
 try:
-    r = _req.get('https://data-asg.goldprice.org/dbXRates/USD',
-                 headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+    r = _req.get('https://api.gold-api.com/price/XAU',
+                 headers={'User-Agent': 'Mozilla/5.0', 'x-access-token': 'goldapi-free'},
+                 timeout=10)
     data = r.json()
-    price = round(float(data['items'][0]['xauPrice']), 0)
-    print(f'Spot prijs via goldprice.org: ${price}')
+    price = round(float(data['price']), 0)
+    print(f'Spot prijs via gold-api.com: ${price}')
 except Exception as e:
-    print(f'goldprice.org gefaald: {e}')
+    print(f'gold-api.com gefaald: {e}')
 
-# Bron 2: metals.live met SSL bypass
+# Bron 2: yfinance XAUUSD=X fast_info (bypass history 404)
 if price is None:
     try:
-        r = _req.get('https://api.metals.live/v1/spot/gold',
-                     headers={'User-Agent': 'Mozilla/5.0'}, timeout=10, verify=False)
-        data = r.json()
-        raw = data[0]['price'] if isinstance(data, list) else data['price']
-        price = round(float(raw), 0)
-        print(f'Spot prijs via metals.live: ${price}')
+        fi = yf.Ticker('XAUUSD=X').fast_info
+        price = round(float(fi['last_price']), 0)
+        print(f'Spot prijs via XAUUSD=X fast_info: ${price}')
     except Exception as e:
-        print(f'metals.live gefaald: {e}')
+        print(f'XAUUSD=X fast_info gefaald: {e}')
 
-# Bron 3: GC=F fast_info (meer real-time dan daily close)
+# Bron 3: goldprice.org
+if price is None:
+    try:
+        r = _req.get('https://data-asg.goldprice.org/dbXRates/USD',
+                     headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        data = r.json()
+        price = round(float(data['items'][0]['xauPrice']), 0)
+        print(f'Spot prijs via goldprice.org: ${price}')
+    except Exception as e:
+        print(f'goldprice.org gefaald: {e}')
+
+# Bron 4: GC=F fast_info (futures, last resort)
 if price is None:
     try:
         price = round(float(yf.Ticker('GC=F').fast_info['last_price']), 0)
