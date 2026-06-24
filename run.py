@@ -69,39 +69,39 @@ h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 
 # Live spot prijs: 3 bronnen in volgorde van voorkeur
+import requests as _req
 price = None
 
-# Bron 1: XAUUSD=X via yfinance (echte spot)
+# Bron 1: goldprice.org spot API (betrouwbaar, geen SSL issues)
 try:
-    spot = yf.Ticker('XAUUSD=X')
-    spot_h = spot.history(period='1d', interval='1m')
-    if not spot_h.empty:
-        price = round(float(spot_h['Close'].iloc[-1]), 0)
-        print(f'Spot prijs via XAUUSD=X: ${price}')
+    r = _req.get('https://data-asg.goldprice.org/dbXRates/USD',
+                 headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+    data = r.json()
+    price = round(float(data['items'][0]['xauPrice']), 0)
+    print(f'Spot prijs via goldprice.org: ${price}')
 except Exception as e:
-    print(f'XAUUSD=X gefaald: {e}')
+    print(f'goldprice.org gefaald: {e}')
 
 # Bron 2: metals.live met SSL bypass
 if price is None:
     try:
-        import ssl
-        ctx = ssl._create_unverified_context()
-        req = urllib.request.Request(
-            'https://api.metals.live/v1/spot/gold',
-            headers={'User-Agent': 'Mozilla/5.0'}
-        )
-        resp = urllib.request.urlopen(req, context=ctx, timeout=10)
-        data = json.loads(resp.read())
+        r = _req.get('https://api.metals.live/v1/spot/gold',
+                     headers={'User-Agent': 'Mozilla/5.0'}, timeout=10, verify=False)
+        data = r.json()
         raw = data[0]['price'] if isinstance(data, list) else data['price']
         price = round(float(raw), 0)
         print(f'Spot prijs via metals.live: ${price}')
     except Exception as e:
         print(f'metals.live gefaald: {e}')
 
-# Bron 3: GC=F h1 close (futures fallback)
+# Bron 3: GC=F fast_info (meer real-time dan daily close)
 if price is None:
-    price = round(float(h1['Close'].iloc[-1]), 0)
-    print(f'Fallback GC=F futures prijs: ${price}')
+    try:
+        price = round(float(yf.Ticker('GC=F').fast_info['last_price']), 0)
+        print(f'Fallback GC=F real-time: ${price}')
+    except Exception as e:
+        price = round(float(h1['Close'].iloc[-1]), 0)
+        print(f'Fallback GC=F h1 close: ${price}')
 wt  = trend(weekly)
 dt  = trend(daily)
 h4t = trend(h4)

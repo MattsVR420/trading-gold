@@ -28,7 +28,7 @@ jobs:
           python-version: '3.11'
 
       - name: Dependencies installeren
-        run: pip install yfinance pandas matplotlib --quiet
+        run: pip install yfinance pandas matplotlib requests --quiet
 
       - name: Twilio credentials aanmaken
         run: |
