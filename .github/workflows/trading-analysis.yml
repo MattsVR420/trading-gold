@@ -60,16 +60,19 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           HOUR=$(date -u +%-H)
-          IN_SESSION=false
-          if ( [ "$HOUR" -ge 4 ] && [ "$HOUR" -le 10 ] ) || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 21 ] ); then
-            IN_SESSION=true
-          fi
-          if [ "$IN_SESSION" = "false" ]; then
+          in_session() { ( [ "$1" -ge 4 ] && [ "$1" -lt 10 ] ) || ( [ "$1" -ge 13 ] && [ "$1" -lt 21 ] ); }
+          if ! in_session "$HOUR"; then
             echo "Buiten sessie (UTC ${HOUR}u) — relay stopt"
             exit 0
           fi
-          echo "In sessie — wacht 28 minuten..."
+          echo "In sessie (UTC ${HOUR}u) — wacht 28 minuten..."
           sleep 1680
+          # Hercheck sessie NA sleep — voorkomt analyses na sessie-einde
+          HOUR=$(date -u +%-H)
+          if ! in_session "$HOUR"; then
+            echo "Sessie voorbij na sleep (UTC ${HOUR}u) — geen nieuwe analyse"
+            exit 0
+          fi
           # Controleer latest.json tijdstip (alleen analyses updaten dit, geen code-pushes)
           LAST=$(curl -s -H "Authorization: token $GH_PAT" \
             "https://raw.githubusercontent.com/MattsVR420/trading-gold/main/latest.json" | \
