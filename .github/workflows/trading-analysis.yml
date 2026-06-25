@@ -49,7 +49,8 @@ jobs:
           git config user.name "MVR Bot"
           git add reports/ charts/ latest.json "dagboek traden/" || true
           git diff --cached --quiet || git commit -m "XAUUSD auto $(date -u +%Y-%m-%d_%H%M) UTC"
-          git push
+          git pull --rebase origin main || true
+          git push || (sleep 10 && git pull --rebase origin main && git push)
 
   relay:
     needs: analyse
