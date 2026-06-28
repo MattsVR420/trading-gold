@@ -6,8 +6,9 @@ on:
     - cron: '0,30 4,5,6,7,8,9 * * *'
     - cron: '0 10 * * *'
     # SESSIE 2: 15:00 CEST (13:00 UTC) → 23:00 CEST (21:00 UTC), elk 30 min
-    - cron: '0,30 13,14,15,16,17,18,19,20 * * *'
-    - cron: '0 21 * * *'
+    # + MARKTOPENING: 23:00-00:00 CEST (21:00-22:00 UTC) — 1u analyses bij goudmarkt open
+    - cron: '0,30 13,14,15,16,17,18,19,20,21 * * *'
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:
@@ -61,7 +62,7 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           HOUR=$(date -u +%-H)
-          in_session() { ( [ "$1" -ge 4 ] && [ "$1" -lt 10 ] ) || ( [ "$1" -ge 13 ] && [ "$1" -lt 21 ] ); }
+          in_session() { ( [ "$1" -ge 4 ] && [ "$1" -lt 10 ] ) || ( [ "$1" -ge 13 ] && [ "$1" -lt 22 ] ); }
           if ! in_session "$HOUR"; then
             echo "Buiten sessie (UTC ${HOUR}u) — relay stopt"
             exit 0

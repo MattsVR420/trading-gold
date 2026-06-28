@@ -42,11 +42,11 @@ jobs:
           fi
           echo "Minuten geleden: $MINUTEN"
 
-          # Sessie-uren (UTC): sessie1=04-09u (06-11 CEST), break, sessie2=13-20u (15-22 CEST)
-          # Strikte grenzen: < 10 en < 21 zodat sessie exact eindigt
+          # Sessie-uren (UTC): sessie1=04-09u (06-11 CEST), sessie2=13-21u (15-23 CEST)
+          # + marktopening: 21-22u UTC (23-00u CEST)
           HOUR=$(date -u +%-H)
           IN_SESSION=false
-          if ( [ "$HOUR" -ge 4 ] && [ "$HOUR" -lt 10 ] ) || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -lt 21 ] ); then
+          if ( [ "$HOUR" -ge 4 ] && [ "$HOUR" -lt 10 ] ) || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -lt 22 ] ); then
             IN_SESSION=true
           fi
           echo "In sessie: $IN_SESSION (UTC uur: $HOUR)"
