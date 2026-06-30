@@ -133,6 +133,50 @@ def send_wa(msg):
     res = json.loads(r.read())
     print(f'WA OK: {res["sid"]}')
 
+def fetch_economic_calendar():
+    """Haal vandaag's USD high/medium-impact events op via ForexFactory XML."""
+    import re as _re, xml.etree.ElementTree as _ET
+    try:
+        req = urllib.request.Request(
+            'https://nfs.faireconomy.media/ff_calendar_thisweek.xml',
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            root = _ET.fromstring(r.read())
+        now_utc = datetime.now(timezone.utc)
+        today_str = now_utc.strftime('%m-%d-%Y')
+        et_to_utc = 4 if 4 <= now_utc.month <= 10 else 5
+        def parse_et(t_str):
+            m = _re.match(r'(\d+):(\d+)(am|pm)', t_str.strip(), _re.IGNORECASE)
+            if not m: return None, None
+            h, mi, p = int(m.group(1)), int(m.group(2)), m.group(3).lower()
+            if p == 'pm' and h != 12: h += 12
+            if p == 'am' and h == 12: h = 0
+            utc_h = (h + et_to_utc) % 24
+            cest_h = (utc_h + 2) % 24
+            mins = (utc_h * 60 + mi) - (now_utc.hour * 60 + now_utc.minute)
+            return f'{cest_h:02d}:{mi:02d}', mins
+        events = []
+        for ev in root.findall('event'):
+            if ev.findtext('country', '') != 'USD': continue
+            impact = ev.findtext('impact', '')
+            if impact not in ('High', 'Medium'): continue
+            if ev.findtext('date', '') != today_str: continue
+            t_str = ev.findtext('time', 'Tentative')
+            cest_t, mins = parse_et(t_str) if t_str not in ('Tentative', 'All Day', '') else (None, None)
+            events.append({
+                'title': ev.findtext('title', ''),
+                'impact': impact,
+                'cest': cest_t,
+                'mins': mins,
+                'forecast': ev.findtext('forecast', '-'),
+                'previous': ev.findtext('previous', '-'),
+            })
+        return sorted(events, key=lambda x: (x['mins'] is None, x['mins'] or 9999))
+    except Exception as e:
+        print(f'Calendar fout: {e}')
+        return []
+
 # === DATA OPHALEN ===
 print('Data ophalen...')
 gold   = yf.Ticker('GC=F')
@@ -237,6 +281,30 @@ if score >= 5:    dec = 'LONG'
 elif score <= -5: dec = 'SHORT'
 else:             dec = 'WACHT'
 
+# === ECONOMIC CALENDAR ===
+cal_events = fetch_economic_calendar()
+print(f'Calendar: {len(cal_events)} USD events vandaag')
+upcoming_high = [e for e in cal_events if e['impact'] == 'High' and e['mins'] is not None and -30 <= e['mins'] <= 90]
+cal_warning = ''
+if upcoming_high:
+    n_ev = upcoming_high[0]
+    if n_ev['mins'] >= 0:
+        cal_warning = f"OPGELET - HIGH IMPACT over {n_ev['mins']} min: {n_ev['title']}"
+    else:
+        cal_warning = f"HIGH IMPACT {abs(n_ev['mins'])} min geleden: {n_ev['title']}"
+    print(cal_warning)
+if cal_events:
+    cal_lines = []
+    for e in cal_events[:6]:
+        icon = '[H]' if e['impact'] == 'High' else '[M]'
+        t_str = f"{e['cest']} CEST" if e['cest'] else 'Tentative'
+        cal_lines.append(f"{icon} {t_str} — {e['title']}")
+    cal_section = '\nKALENDER USD:\n' + '\n'.join(cal_lines)
+    if cal_warning:
+        cal_section += f'\n{cal_warning}'
+else:
+    cal_section = ''
+
 # === ENTRY / SL / TP ===
 if dec in ('LONG', 'SHORT'):
     sl = nearest_sl(price, all_sr, dec)
@@ -282,7 +350,8 @@ if dec in ('LONG', 'SHORT'):
         f'S/R: {near_sr_str}\n\n'
         f'SETUP:\n'
         f'Entry: ${entry} | SL: ${sl}\n'
-        f'TP1: ${tp1} ({rr1}R) | TP2: ${tp2} ({rr2}R)\n\n'
+        f'TP1: ${tp1} ({rr1}R) | TP2: ${tp2} ({rr2}R)'
+        f'{cal_section}\n\n'
         f'github.com/MattsVR420/trading-gold'
     )
 else:
@@ -296,7 +365,8 @@ else:
         f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str}\n\n'
         f'FIBONACCI:\n{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
-        f'Geen confluëntie - wacht op setup.\n'
+        f'Geen confluëntie - wacht op setup.'
+        f'{cal_section}\n\n'
         f'github.com/MattsVR420/trading-gold'
     )
 
@@ -446,6 +516,15 @@ with open(rfile, 'w', encoding='utf-8') as f:
     f.write(f'- **BOS 1H:** {bos_h1 or "geen"}\n')
     f.write(f'- **Pin bar 1H:** {pin_h1_str}\n')
     f.write(f'- **Pin bar 30min:** {pin_m30_str}\n\n')
+    if cal_events:
+        f.write(f'## Economic Calendar (USD vandaag)\n\n')
+        for e in cal_events:
+            icon = '🔴' if e['impact'] == 'High' else '🟡'
+            t_str = f"{e['cest']} CEST" if e['cest'] else 'Tentative'
+            f.write(f'- {icon} **{t_str}** — {e["title"]} (prev: {e["previous"]}, fore: {e["forecast"]})\n')
+        if cal_warning:
+            f.write(f'\n> ⚠️ {cal_warning}\n')
+        f.write('\n')
     f.write(f'## FVGs\n\nBullish 4H: {bull4}\nBearish 4H: {bear4}\n\n')
     f.write(f'## S/R\n\nDaily: {d_sr}\n4H: {h4_sr}\n1H: {h1_sr}\n\n')
     if dec in ('LONG', 'SHORT'):
