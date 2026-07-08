@@ -277,8 +277,14 @@ for p in pins_m30[-1:]:
     if p['type'] == 'HAMMER':        score += 1
     elif p['type'] == 'SHOOTING_STAR': score -= 1
 
-if score >= 5:    dec = 'LONG'
-elif score <= -5: dec = 'SHORT'
+# Fix 1: Penalty als Weekly en Daily conflicteren
+if wt != 'NEUTRAAL' and dt != 'NEUTRAAL' and wt != dt:
+    score = score - 1 if score > 0 else score + 1
+    print(f'Conflict penalty W={wt}/D={dt}: score aangepast naar {score}')
+
+# Fix 2: Hogere threshold (was ±5)
+if score >= 6:    dec = 'LONG'
+elif score <= -6: dec = 'SHORT'
 else:             dec = 'WACHT'
 
 # === ECONOMIC CALENDAR ===
@@ -308,9 +314,22 @@ else:
 # === ENTRY / SL / TP ===
 if dec in ('LONG', 'SHORT'):
     sl = nearest_sl(price, all_sr, dec)
+    # Fix 3: Minimum SL afstand 0.4% van prijs
+    min_sl_dist = price * 0.004
+    if dec == 'LONG':
+        sl = min(sl, round(price - min_sl_dist, 0))
+    elif dec == 'SHORT':
+        sl = max(sl, round(price + min_sl_dist, 0))
     tp1, tp2 = nearest_tp(price, all_sr, dec, sl)
     entry = price
     risk = abs(price - sl) if abs(price - sl) > 0 else price * 0.008
+    # Fix 4: Minimum TP1 = 1.5R, cap TP2 = 5R
+    if dec == 'LONG':
+        tp1 = max(tp1, round(price + risk * 1.5, 0))
+        tp2 = min(tp2, round(price + risk * 5.0, 0))
+    elif dec == 'SHORT':
+        tp1 = min(tp1, round(price - risk * 1.5, 0))
+        tp2 = max(tp2, round(price - risk * 5.0, 0))
     rr1 = round(abs(tp1 - price) / risk, 1)
     rr2 = round(abs(tp2 - price) / risk, 1)
 else:
@@ -324,7 +343,7 @@ print(f'Trend: W={wt} D={dt} 4H={h4t} 1H={h1t} 30m={m30t}')
 print(f'BOS: 4H={bos_h4} 1H={bos_h1} | Pins 1H={pins_h1} 30m={pins_m30}')
 
 # === WHATSAPP ===
-urgent = abs(score) >= 7
+urgent = abs(score) >= 8  # Fix 5: was >=7
 pin_h1_str  = ', '.join([f"{p['type']}@${p['prijs']}" for p in pins_h1])  if pins_h1  else 'geen'
 pin_m30_str = ', '.join([f"{p['type']}@${p['prijs']}" for p in pins_m30]) if pins_m30 else 'geen'
 near_sr = [l for l in all_sr if abs(l - price) / price < 0.015]
