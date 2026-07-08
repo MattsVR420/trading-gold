@@ -185,6 +185,7 @@ daily  = gold.history(period='6mo', interval='1d')
 h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 m30    = gold.history(period='5d',  interval='30m')
+m5     = gold.history(period='1d',  interval='5m')
 
 # === LIVE SPOT PRIJS ===
 import requests as _req
@@ -228,6 +229,7 @@ dt   = trend(daily)
 h4t  = trend(h4)
 h1t  = trend(h1)
 m30t = trend(m30)
+m5t  = trend(m5)
 
 d_sr  = sr(daily, 4)
 h4_sr = sr(h4, 3)
@@ -242,6 +244,8 @@ bos_h4   = bos(h4)
 bos_h1   = bos(h1)
 pins_h1  = pin_bar(h1, 5)
 pins_m30 = pin_bar(m30, 5)
+pins_m5  = pin_bar(m5, 5)
+bos_m5   = bos(m5)
 
 # === SCORING ===
 score = 0
@@ -274,6 +278,14 @@ for p in pins_h1[-1:]:
     if p['type'] == 'HAMMER':        score += 1
     elif p['type'] == 'SHOOTING_STAR': score -= 1
 for p in pins_m30[-1:]:
+    if p['type'] == 'HAMMER':        score += 1
+    elif p['type'] == 'SHOOTING_STAR': score -= 1
+
+if m5t  == 'BULLISH':  score += 1
+elif m5t == 'BEARISH': score -= 1
+if bos_m5 == 'BOS_BULLISH':  score += 1
+elif bos_m5 == 'BOS_BEARISH': score -= 1
+for p in pins_m5[-1:]:
     if p['type'] == 'HAMMER':        score += 1
     elif p['type'] == 'SHOOTING_STAR': score -= 1
 
@@ -339,13 +351,14 @@ else:
 
 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
 print(f'Prijs: ${price} | Beslissing: {dec} | Score: {score}')
-print(f'Trend: W={wt} D={dt} 4H={h4t} 1H={h1t} 30m={m30t}')
-print(f'BOS: 4H={bos_h4} 1H={bos_h1} | Pins 1H={pins_h1} 30m={pins_m30}')
+print(f'Trend: W={wt} D={dt} 4H={h4t} 1H={h1t} 30m={m30t} 5m={m5t}')
+print(f'BOS: 4H={bos_h4} 1H={bos_h1} 5m={bos_m5} | Pins 1H={pins_h1} 30m={pins_m30} 5m={pins_m5}')
 
 # === WHATSAPP ===
 urgent = abs(score) >= 8  # Fix 5: was >=7
 pin_h1_str  = ', '.join([f"{p['type']}@${p['prijs']}" for p in pins_h1])  if pins_h1  else 'geen'
 pin_m30_str = ', '.join([f"{p['type']}@${p['prijs']}" for p in pins_m30]) if pins_m30 else 'geen'
+pin_m5_str  = ', '.join([f"{p['type']}@${p['prijs']}" for p in pins_m5])  if pins_m5  else 'geen'
 near_sr = [l for l in all_sr if abs(l - price) / price < 0.015]
 near_sr_str = ' | '.join([f'${int(l)}' for l in near_sr[:5]]) if near_sr else 'geen'
 fib_str = (f"23.6%: ${fib['23.6']} | 38.2%: ${fib['38.2']}\n"
@@ -360,10 +373,10 @@ if dec in ('LONG', 'SHORT'):
         f'Beslissing: {dec} (Score: {score})\n\n'
         f'TREND:\n'
         f'W: {wt} | D: {dt} | 4H: {h4t}\n'
-        f'1H: {h1t} | 30min: {m30t}\n\n'
+        f'1H: {h1t} | 30min: {m30t} | 5min: {m5t}\n\n'
         f'STRUCTUUR:\n'
-        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"}\n'
-        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str}\n\n'
+        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"} | BOS 5m: {bos_m5 or "geen"}\n'
+        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str} | Pin 5m: {pin_m5_str}\n\n'
         f'FIBONACCI (${fib["low"]}-${fib["high"]}):\n'
         f'{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
@@ -380,8 +393,8 @@ else:
         f'TREND:\n'
         f'W: {wt} | D: {dt} | 4H: {h4t}\n'
         f'1H: {h1t} | 30min: {m30t}\n\n'
-        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"}\n'
-        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str}\n\n'
+        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"} | BOS 5m: {bos_m5 or "geen"}\n'
+        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str} | Pin 5m: {pin_m5_str}\n\n'
         f'FIBONACCI:\n{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
         f'Geen confluëntie - wacht op setup.'
@@ -525,7 +538,7 @@ with open(rfile, 'w', encoding='utf-8') as f:
     if cfile:
         f.write(f'## Grafiek\n\n![chart](../{cfile})\n\n---\n\n')
     f.write(f'## Top-Down Trend\n\n| TF | Trend |\n|---|---|\n')
-    for tf, tr in [('Weekly', wt), ('Daily', dt), ('4H', h4t), ('1H', h1t), ('30min', m30t)]:
+    for tf, tr in [('Weekly', wt), ('Daily', dt), ('4H', h4t), ('1H', h1t), ('30min', m30t), ('5min', m5t)]:
         f.write(f'| {tf} | {tr} |\n')
     f.write(f'\n## Fibonacci (swing ${fib["low"]} - ${fib["high"]})\n\n| Level | Prijs |\n|---|---|\n')
     for lv in ['23.6', '38.2', '50.0', '61.8', '78.6']:
@@ -596,7 +609,7 @@ if dec in ('LONG', 'SHORT'):
             df.write(f'- **Prijs bij signaal:** ${price}\n')
             df.write(f'- **Entry:** ${entry} | **SL:** ${sl} | **TP1:** ${tp1} ({rr1}R) | **TP2:** ${tp2} ({rr2}R)\n\n')
             df.write(f'## Top-Down Context\n')
-            df.write(f'- W: {wt} | D: {dt} | 4H: {h4t} | 1H: {h1t} | 30min: {m30t}\n')
+            df.write(f'- W: {wt} | D: {dt} | 4H: {h4t} | 1H: {h1t} | 30min: {m30t} | 5min: {m5t}\n')
             df.write(f'- BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"}\n')
             df.write(f'- Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str}\n')
             df.write(f'- Fib 50%: ${fib["50.0"]} | 61.8%: ${fib["61.8"]}\n')
