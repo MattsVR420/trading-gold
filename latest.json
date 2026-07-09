@@ -1,5 +1,5 @@
 {
-  "tijdstip": "2026-07-09 15:52",
+  "tijdstip": "2026-07-09 16:20",
   "prijs": 4130,
   "beslissing": "WACHT",
   "score": 1,
@@ -18,12 +18,20 @@
     {
       "type": "SHOOTING_STAR",
       "prijs": 4132.0
+    },
+    {
+      "type": "SHOOTING_STAR",
+      "prijs": 4143.0
     }
   ],
   "pin_m30": [
     {
       "type": "HAMMER",
       "prijs": 4128.0
+    },
+    {
+      "type": "SHOOTING_STAR",
+      "prijs": 4143.0
     }
   ],
   "fib": {
@@ -35,8 +43,14 @@
     "61.8": 4514.0,
     "78.6": 4271.0
   },
-  "chart": "charts/2026-07-09_1552_XAUUSD.png",
+  "chart": "charts/2026-07-09_1620_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-07-09 16:20",
+      "prijs": 4130,
+      "beslissing": "WACHT",
+      "score": 1
+    },
     {
       "tijdstip": "2026-07-09 15:52",
       "prijs": 4130,
@@ -150,12 +164,6 @@
       "prijs": 4061,
       "beslissing": "WACHT",
       "score": 1
-    },
-    {
-      "tijdstip": "2026-07-08 23:12",
-      "prijs": 4077,
-      "beslissing": "WACHT",
-      "score": 0
     }
   ]
 }
