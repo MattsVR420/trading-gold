@@ -294,9 +294,9 @@ if wt != 'NEUTRAAL' and dt != 'NEUTRAAL' and wt != dt:
     score = score - 1 if score > 0 else score + 1
     print(f'Conflict penalty W={wt}/D={dt}: score aangepast naar {score}')
 
-# Fix 2: Hogere threshold (was ±5)
-if score >= 6:    dec = 'LONG'
-elif score <= -6: dec = 'SHORT'
+# Threshold ±5 (conflict penalty zorgt al voor filtering bij W/D conflict)
+if score >= 5:    dec = 'LONG'
+elif score <= -5: dec = 'SHORT'
 else:             dec = 'WACHT'
 
 # === ECONOMIC CALENDAR ===
@@ -344,8 +344,23 @@ if dec in ('LONG', 'SHORT'):
         tp2 = max(tp2, round(price - risk * 5.0, 0))
     rr1 = round(abs(tp1 - price) / risk, 1)
     rr2 = round(abs(tp2 - price) / risk, 1)
+
+    # Entry zone: ideale instap zone op basis van dichtstbijzijnde S/R
+    if dec == 'LONG':
+        zone_levels = [l for l in all_sr if l <= price * 1.002]
+        ez_low  = round(max(zone_levels), 0) if zone_levels else round(price - risk * 0.5, 0)
+        ez_high = round(ez_low + risk * 0.4, 0)
+        at_zone = price <= ez_high * 1.003
+        entry_zone_str = f'MARKET ENTRY (prijs in zone)' if at_zone else f'LIMIT ZONE: ${ez_low}-${ez_high}'
+    else:
+        zone_levels = [l for l in all_sr if l >= price * 0.998]
+        ez_high = round(min(zone_levels), 0) if zone_levels else round(price + risk * 0.5, 0)
+        ez_low  = round(ez_high - risk * 0.4, 0)
+        at_zone = price >= ez_low * 0.997
+        entry_zone_str = f'MARKET ENTRY (prijs in zone)' if at_zone else f'LIMIT ZONE: ${ez_low}-${ez_high}'
 else:
     slp = price * 0.008
+    entry_zone_str = ''
     entry = price; sl = round(price - slp, 0); tp1 = round(price + slp*1.5, 0); tp2 = round(price + slp*3, 0)
     rr1 = 1.5; rr2 = 3.0
 
@@ -381,6 +396,7 @@ if dec in ('LONG', 'SHORT'):
         f'{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
         f'SETUP:\n'
+        f'{entry_zone_str}\n'
         f'Entry: ${entry} | SL: ${sl}\n'
         f'TP1: ${tp1} ({rr1}R) | TP2: ${tp2} ({rr2}R)'
         f'{cal_section}\n\n'
