@@ -1,6 +1,6 @@
 {
-  "tijdstip": "2026-07-10 04:07",
-  "prijs": 4121,
+  "tijdstip": "2026-07-10 04:36",
+  "prijs": 4119,
   "beslissing": "WACHT",
   "score": 0,
   "entry": null,
@@ -22,16 +22,22 @@
   ],
   "pin_m30": [],
   "fib": {
-    "high": 5405.0,
+    "high": 5304.0,
     "low": 3962.0,
-    "23.6": 5065.0,
-    "38.2": 4854.0,
-    "50.0": 4684.0,
-    "61.8": 4514.0,
-    "78.6": 4271.0
+    "23.6": 4987.0,
+    "38.2": 4791.0,
+    "50.0": 4633.0,
+    "61.8": 4475.0,
+    "78.6": 4250.0
   },
-  "chart": "charts/2026-07-10_0407_XAUUSD.png",
+  "chart": "charts/2026-07-10_0436_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-07-10 04:36",
+      "prijs": 4119,
+      "beslissing": "WACHT",
+      "score": 0
+    },
     {
       "tijdstip": "2026-07-10 04:07",
       "prijs": 4121,
@@ -145,12 +151,6 @@
       "prijs": 4131,
       "beslissing": "WACHT",
       "score": 5
-    },
-    {
-      "tijdstip": "2026-07-09 17:18",
-      "prijs": 4127,
-      "beslissing": "WACHT",
-      "score": 1
     }
   ]
 }
