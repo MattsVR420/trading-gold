@@ -1,0 +1,48 @@
+name: XAUUSD Weekly Outlook
+
+on:
+  schedule:
+    - cron: '0 17 * * 5'  # Vrijdag 19:00 CEST (17:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  weekly-outlook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dependencies installeren
+        run: pip install yfinance pandas requests --quiet
+
+      - name: Twilio credentials aanmaken
+        run: |
+          printf '{"sid":"%s","token":"%s"}' "$TWILIO_SID" "$TWILIO_TOKEN" > creds.json
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+
+      - name: Weekly outlook uitvoeren
+        run: python weekly_outlook.py
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+
+      - name: Resultaten pushen
+        run: |
+          git config user.email "bot@mvr.be"
+          git config user.name "MVR Bot"
+          git add reports/ || true
+          git diff --cached --quiet || git commit -m "Weekly Outlook $(date -u +%Y-%m-%d) UTC"
+          git pull --rebase origin main || true
+          git push || (sleep 10 && git pull --rebase origin main && git push)
