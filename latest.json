@@ -1,8 +1,8 @@
 {
-  "tijdstip": "2026-07-22 17:40",
+  "tijdstip": "2026-07-22 17:46",
   "prijs": 4142,
   "beslissing": "WACHT",
-  "score": 4,
+  "score": 3,
   "entry": null,
   "sl": null,
   "tp1": null,
@@ -34,8 +34,14 @@
     "61.8": 4404.0,
     "78.6": 4210.0
   },
-  "chart": "charts/2026-07-22_1740_XAUUSD.png",
+  "chart": "charts/2026-07-22_1746_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-07-22 17:46",
+      "prijs": 4142,
+      "beslissing": "WACHT",
+      "score": 3
+    },
     {
       "tijdstip": "2026-07-22 17:40",
       "prijs": 4142,
@@ -149,12 +155,6 @@
       "prijs": 4120,
       "beslissing": "WACHT",
       "score": 4
-    },
-    {
-      "tijdstip": "2026-07-22 07:00",
-      "prijs": 4117,
-      "beslissing": "WACHT",
-      "score": 3
     }
   ]
 }
