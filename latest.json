@@ -1,31 +1,21 @@
 {
-  "tijdstip": "2026-07-27 09:28",
-  "prijs": 4096,
+  "tijdstip": "2026-07-27 09:57",
+  "prijs": 4100,
   "beslissing": "LONG",
-  "score": 8,
-  "entry": 4096,
-  "sl": 4080,
-  "tp1": 4120,
+  "score": 7,
+  "entry": 4100,
+  "sl": 4084,
+  "tp1": 4124,
   "tp2": 4119,
   "weekly_trend": "BULLISH",
   "daily_trend": "NEUTRAAL",
   "h4_trend": "BULLISH",
   "h1_trend": "BULLISH",
-  "m30_trend": "BULLISH",
+  "m30_trend": "NEUTRAAL",
   "bos_h4": "BOS_BULLISH",
   "bos_h1": "BOS_BULLISH",
-  "pin_h1": [
-    {
-      "type": "SHOOTING_STAR",
-      "prijs": 4100.0
-    }
-  ],
-  "pin_m30": [
-    {
-      "type": "SHOOTING_STAR",
-      "prijs": 4100.0
-    }
-  ],
+  "pin_h1": [],
+  "pin_m30": [],
   "fib": {
     "high": 4950.0,
     "low": 3962.0,
@@ -35,8 +25,14 @@
     "61.8": 4340.0,
     "78.6": 4174.0
   },
-  "chart": "charts/2026-07-27_0928_XAUUSD.png",
+  "chart": "charts/2026-07-27_0957_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-07-27 09:57",
+      "prijs": 4100,
+      "beslissing": "LONG",
+      "score": 7
+    },
     {
       "tijdstip": "2026-07-27 09:28",
       "prijs": 4096,
@@ -147,12 +143,6 @@
     },
     {
       "tijdstip": "2026-07-26 19:53",
-      "prijs": 4054,
-      "beslissing": "LONG",
-      "score": 5
-    },
-    {
-      "tijdstip": "2026-07-26 19:24",
       "prijs": 4054,
       "beslissing": "LONG",
       "score": 5
