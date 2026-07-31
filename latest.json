@@ -1,8 +1,8 @@
 {
-  "tijdstip": "2026-07-31 18:22",
-  "prijs": 4051,
+  "tijdstip": "2026-07-31 18:51",
+  "prijs": 4050,
   "beslissing": "WACHT",
-  "score": 0,
+  "score": 4,
   "entry": null,
   "sl": null,
   "tp1": null,
@@ -15,7 +15,12 @@
   "bos_h4": null,
   "bos_h1": null,
   "pin_h1": [],
-  "pin_m30": [],
+  "pin_m30": [
+    {
+      "type": "HAMMER",
+      "prijs": 4104.0
+    }
+  ],
   "fib": {
     "high": 4880.0,
     "low": 3962.0,
@@ -25,8 +30,14 @@
     "61.8": 4313.0,
     "78.6": 4159.0
   },
-  "chart": "charts/2026-07-31_1822_XAUUSD.png",
+  "chart": "charts/2026-07-31_1851_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-07-31 18:51",
+      "prijs": 4050,
+      "beslissing": "WACHT",
+      "score": 4
+    },
     {
       "tijdstip": "2026-07-31 18:22",
       "prijs": 4051,
@@ -140,12 +151,6 @@
       "prijs": 4077,
       "beslissing": "WACHT",
       "score": 1
-    },
-    {
-      "tijdstip": "2026-07-31 05:26",
-      "prijs": 4083,
-      "beslissing": "WACHT",
-      "score": -1
     }
   ]
 }
