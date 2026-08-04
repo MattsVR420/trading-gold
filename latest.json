@@ -1,12 +1,12 @@
 {
-  "tijdstip": "2026-08-04 18:08",
-  "prijs": 4090,
-  "beslissing": "WACHT",
-  "score": 1,
-  "entry": null,
-  "sl": null,
-  "tp1": null,
-  "tp2": null,
+  "tijdstip": "2026-08-04 18:37",
+  "prijs": 4144,
+  "beslissing": "LONG",
+  "score": 8,
+  "entry": 4144,
+  "sl": 4127,
+  "tp1": 4177,
+  "tp2": 4200,
   "weekly_trend": "NEUTRAAL",
   "daily_trend": "NEUTRAAL",
   "h4_trend": "NEUTRAAL",
@@ -18,10 +18,6 @@
     {
       "type": "HAMMER",
       "prijs": 4131.0
-    },
-    {
-      "type": "SHOOTING_STAR",
-      "prijs": 4164.0
     }
   ],
   "pin_m30": [
@@ -43,8 +39,14 @@
     "61.8": 4313.0,
     "78.6": 4159.0
   },
-  "chart": "charts/2026-08-04_1808_XAUUSD.png",
+  "chart": "charts/2026-08-04_1837_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-08-04 18:37",
+      "prijs": 4144,
+      "beslissing": "LONG",
+      "score": 8
+    },
     {
       "tijdstip": "2026-08-04 18:08",
       "prijs": 4090,
@@ -158,12 +160,6 @@
       "prijs": 4062,
       "beslissing": "WACHT",
       "score": 1
-    },
-    {
-      "tijdstip": "2026-08-04 06:30",
-      "prijs": 4062,
-      "beslissing": "WACHT",
-      "score": -1
     }
   ]
 }
