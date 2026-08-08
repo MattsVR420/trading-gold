@@ -1,5 +1,5 @@
 {
-  "tijdstip": "2026-08-07 22:41",
+  "tijdstip": "2026-08-08 04:54",
   "prijs": 4343,
   "beslissing": "LONG",
   "score": 9,
@@ -30,8 +30,14 @@
     "61.8": 4313.0,
     "78.6": 4159.0
   },
-  "chart": "charts/2026-08-07_2241_XAUUSD.png",
+  "chart": "charts/2026-08-08_0454_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-08-08 04:54",
+      "prijs": 4343,
+      "beslissing": "LONG",
+      "score": 9
+    },
     {
       "tijdstip": "2026-08-07 22:41",
       "prijs": 4343,
@@ -145,12 +151,6 @@
       "prijs": 4352,
       "beslissing": "LONG",
       "score": 6
-    },
-    {
-      "tijdstip": "2026-08-07 15:15",
-      "prijs": 4353,
-      "beslissing": "WACHT",
-      "score": 3
     }
   ]
 }
