@@ -88,27 +88,67 @@ def fibonacci(df, n=90):
         '78.6': round(swH - d*0.786, 0),
     }
 
-def nearest_sl(price, levels, direction):
-    if direction == 'LONG':
-        below = [l for l in levels if l < price * 0.999]
-        return round(max(below), 0) if below else round(price * 0.992, 0)
-    else:
-        above = [l for l in levels if l > price * 1.001]
-        return round(min(above), 0) if above else round(price * 1.008, 0)
+def recent_high_low(df, n):
+    d = df.tail(n)
+    if d.empty: return None, None
+    return round(float(d['High'].max()), 0), round(float(d['Low'].min()), 0)
 
-def nearest_tp(price, levels, direction, sl):
-    risk = abs(price - sl)
-    if risk == 0: risk = price * 0.008
+def session_high_low(df, start_h, end_h):
+    if df.empty: return None, None
+    idx = df.index.tz_convert('UTC') if df.index.tz else df.index.tz_localize('UTC')
+    today = datetime.now(timezone.utc).date()
+    mask = (idx.date == today) & (idx.hour >= start_h) & (idx.hour < end_h)
+    d = df[mask.to_numpy()] if hasattr(mask, 'to_numpy') else df[mask]
+    if d.empty: return None, None
+    return round(float(d['High'].max()), 0), round(float(d['Low'].min()), 0)
+
+def inverse_fvg(df, n=40):
+    bull, bear = fvgs(df, n)
+    last_close = float(df['Close'].iloc[-1])
+    for f in bull:
+        if last_close < f['low']:
+            return 'BEARISH'
+    for f in bear:
+        if last_close > f['high']:
+            return 'BULLISH'
+    return None
+
+def detect_manipulation(df, highs, lows, lookback=12):
+    d = df.tail(lookback)
+    if d.empty: return None, None, None
+    price_now = float(df['Close'].iloc[-1])
+    day_high = float(d['High'].max())
+    day_low = float(d['Low'].min())
+    swept_high = max([l for l in highs if day_high > l and price_now < l], default=None)
+    swept_low = min([l for l in lows if day_low < l and price_now > l], default=None)
+    if swept_high and swept_low:
+        return (('BEARISH', swept_high, day_high) if abs(price_now - swept_high) < abs(price_now - swept_low)
+                else ('BULLISH', swept_low, day_low))
+    if swept_high:
+        return 'BEARISH', swept_high, day_high
+    if swept_low:
+        return 'BULLISH', swept_low, day_low
+    return None, None, None
+
+def bos_sequence_confirms(df, need_first, need_second, lookback=60, lb=3):
+    d = df.tail(lookback).reset_index(drop=True)
+    if len(d) < lb * 2 + 4: return False
+    first_idx, second_idx = None, None
+    for i in range(lb * 2, len(d)):
+        b = bos(d.iloc[:i + 1], lb=lb)
+        if b == need_first and first_idx is None:
+            first_idx = i
+        elif b == need_second and first_idx is not None:
+            second_idx = i
+    return second_idx is not None and second_idx >= len(d) - 5
+
+def next_liquidity_targets(price, levels, direction):
     if direction == 'LONG':
-        cands = [l for l in levels if l > price + risk * 0.5]
-        tp1 = round(min(cands), 0) if cands else round(price + risk * 1.5, 0)
-        cands2 = [l for l in levels if l > tp1 + 1]
-        tp2 = round(min(cands2), 0) if cands2 else round(price + risk * 3, 0)
+        cands = sorted([l for l in levels if l > price])
     else:
-        cands = [l for l in levels if l < price - risk * 0.5]
-        tp1 = round(max(cands), 0) if cands else round(price - risk * 1.5, 0)
-        cands2 = [l for l in levels if l < tp1 - 1]
-        tp2 = round(max(cands2), 0) if cands2 else round(price - risk * 3, 0)
+        cands = sorted([l for l in levels if l < price], reverse=True)
+    tp1 = cands[0] if cands else None
+    tp2 = cands[1] if len(cands) > 1 else None
     return tp1, tp2
 
 def send_wa(msg):
@@ -186,6 +226,12 @@ h1     = gold.history(period='60d', interval='1h')
 h4     = h1.resample('4h').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna()
 m30    = gold.history(period='5d',  interval='30m')
 m5     = gold.history(period='1d',  interval='5m')
+m1     = gold.history(period='1d',  interval='1m')
+try:
+    dxy = yf.Ticker('DX-Y.NYB').history(period='5d', interval='5m')
+except Exception as e:
+    print(f'DXY data fout: {e}')
+    dxy = pd.DataFrame()
 
 # === LIVE SPOT PRIJS ===
 import requests as _req
@@ -247,57 +293,64 @@ pins_m30 = pin_bar(m30, 5)
 pins_m5  = pin_bar(m5, 5)
 bos_m5   = bos(m5)
 
-# === SCORING ===
-score = 0
-if wt   == 'BULLISH':  score += 2
-elif wt  == 'BEARISH': score -= 2
-if dt   == 'BULLISH':  score += 2
-elif dt  == 'BEARISH': score -= 2
-if h4t  == 'BULLISH':  score += 1
-elif h4t == 'BEARISH': score -= 1
-if h1t  == 'BULLISH':  score += 1
-elif h1t == 'BEARISH': score -= 1
-if m30t == 'BULLISH':  score += 1
-elif m30t == 'BEARISH':score -= 1
+# === LIQUIDITY SWEEP STRATEGIE (TJR-methode) ===
+sess_asia_h,   sess_asia_l   = session_high_low(m5, 0, 8)
+sess_london_h, sess_london_l = session_high_low(m5, 8, 13)
+sess_ny_h,     sess_ny_l     = session_high_low(m5, 13, 21)
+rec_h1_h, rec_h1_l = recent_high_low(h1, 24)
+rec_h4_h, rec_h4_l = recent_high_low(h4, 12)
 
-for l in all_sr:
-    if abs(price - l) / price < 0.004:
-        score += (1 if price >= l else -1)
+liq_highs = sorted(set(v for v in [sess_asia_h, sess_london_h, sess_ny_h, rec_h1_h, rec_h4_h] if v))
+liq_lows  = sorted(set(v for v in [sess_asia_l, sess_london_l, sess_ny_l, rec_h1_l, rec_h4_l] if v))
 
-for f in bull4:
-    if f['low'] <= price <= f['high'] * 1.01: score += 1
-for f in bear4:
-    if f['low'] * 0.99 <= price <= f['high']: score -= 1
+# Stap 1: manipulatie — prijs sweept een draw on liquidity
+manip_bias, manip_level, manip_extreme = detect_manipulation(m5, liq_highs, liq_lows, lookback=12)
 
-if bos_h4 == 'BOS_BULLISH':  score += 1
-elif bos_h4 == 'BOS_BEARISH': score -= 1
-if bos_h1 == 'BOS_BULLISH':  score += 1
-elif bos_h1 == 'BOS_BEARISH': score -= 1
+# Stap 2: 5m reversal-bevestiging via BOS of inverse FVG
+reversal_confirmed = False
+ifvg_5m = None
+if manip_bias in ('BEARISH', 'BULLISH'):
+    ifvg_5m = inverse_fvg(m5)
+    need_bos = 'BOS_BEARISH' if manip_bias == 'BEARISH' else 'BOS_BULLISH'
+    reversal_confirmed = (bos(m5, 5) == need_bos) or (ifvg_5m == manip_bias)
 
-for p in pins_h1[-1:]:
-    if p['type'] == 'HAMMER':        score += 1
-    elif p['type'] == 'SHOOTING_STAR': score -= 1
-for p in pins_m30[-1:]:
-    if p['type'] == 'HAMMER':        score += 1
-    elif p['type'] == 'SHOOTING_STAR': score -= 1
+# Stap 3+4: 1m retrace gevolgd door 1m break of structure terug in trendrichting = entry
+entry_confirmed = False
+if reversal_confirmed and manip_bias == 'BEARISH':
+    entry_confirmed = bos_sequence_confirms(m1, 'BOS_BULLISH', 'BOS_BEARISH')
+elif reversal_confirmed and manip_bias == 'BULLISH':
+    entry_confirmed = bos_sequence_confirms(m1, 'BOS_BEARISH', 'BOS_BULLISH')
 
-if m5t  == 'BULLISH':  score += 1
-elif m5t == 'BEARISH': score -= 1
-if bos_m5 == 'BOS_BULLISH':  score += 1
-elif bos_m5 == 'BOS_BEARISH': score -= 1
-for p in pins_m5[-1:]:
-    if p['type'] == 'HAMMER':        score += 1
-    elif p['type'] == 'SHOOTING_STAR': score -= 1
+# Correlatiefilter — vervangt TJR's ES/NASDAQ alignment-check; goud vs DXY (omgekeerd gecorreleerd)
+dxy_trend_5m = 'ONBEKEND'
+correlation_ok = False
+try:
+    if not dxy.empty:
+        dxy_trend_5m = trend(dxy)
+        if manip_bias == 'BEARISH':
+            correlation_ok = dxy_trend_5m == 'BULLISH'
+        elif manip_bias == 'BULLISH':
+            correlation_ok = dxy_trend_5m == 'BEARISH'
+except Exception as e:
+    print(f'DXY analyse fout: {e}')
 
-# Fix 1: Penalty als Weekly en Daily conflicteren
-if wt != 'NEUTRAAL' and dt != 'NEUTRAAL' and wt != dt:
-    score = score - 1 if score > 0 else score + 1
-    print(f'Conflict penalty W={wt}/D={dt}: score aangepast naar {score}')
+steps_confirmed = sum([manip_bias is not None, reversal_confirmed, entry_confirmed, correlation_ok])
+if manip_bias == 'BULLISH':   score = steps_confirmed * 2
+elif manip_bias == 'BEARISH': score = -(steps_confirmed * 2)
+else:                          score = 0
 
-# Threshold ±5 (conflict penalty zorgt al voor filtering bij W/D conflict)
-if score >= 5:    dec = 'LONG'
-elif score <= -5: dec = 'SHORT'
-else:             dec = 'WACHT'
+if manip_bias == 'BULLISH' and reversal_confirmed and entry_confirmed and correlation_ok:
+    dec = 'LONG'
+elif manip_bias == 'BEARISH' and reversal_confirmed and entry_confirmed and correlation_ok:
+    dec = 'SHORT'
+else:
+    dec = 'WACHT'
+
+sweep_str = f'{manip_bias} @ ${manip_level}' if manip_bias else 'geen sweep gedetecteerd'
+confirm_str = (f'5m reversal: {"OK" if reversal_confirmed else "nee"} | '
+               f'1m entry: {"OK" if entry_confirmed else "nee"} | '
+               f'DXY ({dxy_trend_5m}): {"OK" if correlation_ok else "nee"}')
+print(f'Liquidity sweep: {sweep_str} | {confirm_str}')
 
 # === ECONOMIC CALENDAR ===
 cal_events = fetch_economic_calendar()
@@ -323,18 +376,29 @@ if cal_events:
 else:
     cal_section = ''
 
-# === ENTRY / SL / TP ===
+# === ENTRY / SL / TP (liquidity sweep) ===
 if dec in ('LONG', 'SHORT'):
-    sl = nearest_sl(price, all_sr, dec)
+    # SL net voorbij de swing die tijdens de manipulatie/sweep ontstond
+    buffer = price * 0.0008
+    sl = round(manip_extreme + buffer, 0) if dec == 'SHORT' else round(manip_extreme - buffer, 0)
     # Fix 3: Minimum SL afstand 0.4% van prijs
     min_sl_dist = price * 0.004
     if dec == 'LONG':
         sl = min(sl, round(price - min_sl_dist, 0))
     elif dec == 'SHORT':
         sl = max(sl, round(price + min_sl_dist, 0))
-    tp1, tp2 = nearest_tp(price, all_sr, dec, sl)
-    entry = price
+
     risk = abs(price - sl) if abs(price - sl) > 0 else price * 0.008
+
+    # TP's op de volgende draws on liquidity in de trendrichting
+    target_levels = liq_highs if dec == 'LONG' else liq_lows
+    tp1, tp2 = next_liquidity_targets(price, target_levels, dec)
+    if tp1 is None:
+        tp1 = round(price + risk * 1.5, 0) if dec == 'LONG' else round(price - risk * 1.5, 0)
+    if tp2 is None:
+        tp2 = round(price + risk * 3.0, 0) if dec == 'LONG' else round(price - risk * 3.0, 0)
+
+    entry = price
     # Fix 4: Minimum TP1 = 1.5R, cap TP2 = 5R
     if dec == 'LONG':
         tp1 = max(tp1, round(price + risk * 1.5, 0))
@@ -345,19 +409,7 @@ if dec in ('LONG', 'SHORT'):
     rr1 = round(abs(tp1 - price) / risk, 1)
     rr2 = round(abs(tp2 - price) / risk, 1)
 
-    # Entry zone: ideale instap zone op basis van dichtstbijzijnde S/R
-    if dec == 'LONG':
-        zone_levels = [l for l in all_sr if l <= price * 1.002]
-        ez_low  = round(max(zone_levels), 0) if zone_levels else round(price - risk * 0.5, 0)
-        ez_high = round(ez_low + risk * 0.4, 0)
-        at_zone = price <= ez_high * 1.003
-        entry_zone_str = f'MARKET ENTRY (prijs in zone)' if at_zone else f'LIMIT ZONE: ${ez_low}-${ez_high}'
-    else:
-        zone_levels = [l for l in all_sr if l >= price * 0.998]
-        ez_high = round(min(zone_levels), 0) if zone_levels else round(price + risk * 0.5, 0)
-        ez_low  = round(ez_high - risk * 0.4, 0)
-        at_zone = price >= ez_low * 0.997
-        entry_zone_str = f'MARKET ENTRY (prijs in zone)' if at_zone else f'LIMIT ZONE: ${ez_low}-${ez_high}'
+    entry_zone_str = 'MARKET ENTRY (liquidity sweep bevestigd op 1m)'
 else:
     slp = price * 0.008
     entry_zone_str = ''
@@ -383,15 +435,14 @@ if dec in ('LONG', 'SHORT'):
     header = 'URGENT - DIRECT INSTAPPE\n\n' if urgent else ''
     wa_msg = (
         f'{header}'
-        f'XAUUSD Top-Down | {ts} UTC\n\n'
+        f'XAUUSD Liquidity Sweep | {ts} UTC\n\n'
         f'Prijs: ${price}\n'
         f'Beslissing: {dec} (Score: {score})\n\n'
-        f'TREND:\n'
-        f'W: {wt} | D: {dt} | 4H: {h4t}\n'
-        f'1H: {h1t} | 30min: {m30t} | 5min: {m5t}\n\n'
-        f'STRUCTUUR:\n'
-        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"} | BOS 5m: {bos_m5 or "geen"}\n'
-        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str} | Pin 5m: {pin_m5_str}\n\n'
+        f'LIQUIDITY SWEEP:\n'
+        f'Manipulatie: {sweep_str}\n'
+        f'{confirm_str}\n\n'
+        f'CONTEXT:\n'
+        f'W: {wt} | D: {dt} | 4H: {h4t} | 1H: {h1t} | 30min: {m30t}\n\n'
         f'FIBONACCI (${fib["low"]}-${fib["high"]}):\n'
         f'{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
@@ -404,16 +455,16 @@ if dec in ('LONG', 'SHORT'):
     )
 else:
     wa_msg = (
-        f'XAUUSD Top-Down | {ts} UTC\n\n'
+        f'XAUUSD Liquidity Sweep | {ts} UTC\n\n'
         f'Prijs: ${price} | WACHT (Score: {score})\n\n'
-        f'TREND:\n'
-        f'W: {wt} | D: {dt} | 4H: {h4t}\n'
-        f'1H: {h1t} | 30min: {m30t}\n\n'
-        f'BOS 4H: {bos_h4 or "geen"} | BOS 1H: {bos_h1 or "geen"} | BOS 5m: {bos_m5 or "geen"}\n'
-        f'Pin 1H: {pin_h1_str} | Pin 30m: {pin_m30_str} | Pin 5m: {pin_m5_str}\n\n'
+        f'LIQUIDITY SWEEP:\n'
+        f'Manipulatie: {sweep_str}\n'
+        f'{confirm_str}\n\n'
+        f'CONTEXT:\n'
+        f'W: {wt} | D: {dt} | 4H: {h4t} | 1H: {h1t} | 30min: {m30t}\n\n'
         f'FIBONACCI:\n{fib_str}\n\n'
         f'S/R: {near_sr_str}\n\n'
-        f'Geen confluëntie - wacht op setup.'
+        f'Geen volledige confluëntie - wacht op setup.'
         f'{cal_section}\n\n'
         f'github.com/MattsVR420/trading-gold'
     )
@@ -549,8 +600,15 @@ os.makedirs('reports', exist_ok=True)
 cts = datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M')
 rfile = f'reports/{cts}_XAUUSD.md'
 with open(rfile, 'w', encoding='utf-8') as f:
-    f.write(f'# XAUUSD Top-Down Analyse - {ts} UTC\n\n')
+    f.write(f'# XAUUSD Liquidity Sweep Analyse - {ts} UTC\n\n')
     f.write(f'> Prijs: ${price} | Beslissing: {dec} | Score: {score}\n\n---\n\n')
+    f.write(f'## Liquidity Sweep\n\n')
+    f.write(f'- **Manipulatie:** {sweep_str}\n')
+    f.write(f'- **5m reversal (BOS/iFVG):** {"bevestigd" if reversal_confirmed else "niet bevestigd"} (iFVG: {ifvg_5m or "geen"})\n')
+    f.write(f'- **1m entry trigger:** {"bevestigd" if entry_confirmed else "niet bevestigd"}\n')
+    f.write(f'- **DXY 5m trend:** {dxy_trend_5m} | **Correlatie:** {"OK" if correlation_ok else "niet aligned"}\n')
+    f.write(f'- **Draws on liquidity (highs):** {liq_highs}\n')
+    f.write(f'- **Draws on liquidity (lows):** {liq_lows}\n\n---\n\n')
     if cfile:
         f.write(f'## Grafiek\n\n![chart](../{cfile})\n\n---\n\n')
     f.write(f'## Top-Down Trend\n\n| TF | Trend |\n|---|---|\n')
@@ -602,6 +660,10 @@ try:
         'bos_h4': bos_h4, 'bos_h1': bos_h1,
         'pin_h1': pins_h1, 'pin_m30': pins_m30,
         'fib': fib, 'chart': cfile if cfile else None,
+        'manipulatie': manip_bias, 'manip_level': manip_level,
+        'reversal_confirmed': reversal_confirmed, 'entry_confirmed': entry_confirmed,
+        'dxy_trend': dxy_trend_5m, 'correlatie_ok': correlation_ok,
+        'liq_highs': liq_highs, 'liq_lows': liq_lows,
         'history': history
     }
     with open('latest.json', 'w', encoding='utf-8') as jf:
