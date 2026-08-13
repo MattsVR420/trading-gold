@@ -1,8 +1,8 @@
 {
-  "tijdstip": "2026-08-12 22:47",
-  "prijs": 4402,
+  "tijdstip": "2026-08-13 04:10",
+  "prijs": 4397,
   "beslissing": "WACHT",
-  "score": 0,
+  "score": 4,
   "entry": null,
   "sl": null,
   "tp1": null,
@@ -17,13 +17,17 @@
   "pin_h1": [
     {
       "type": "SHOOTING_STAR",
-      "prijs": 4472.0
+      "prijs": 4473.0
     }
   ],
   "pin_m30": [
     {
       "type": "SHOOTING_STAR",
-      "prijs": 4461.0
+      "prijs": 4509.0
+    },
+    {
+      "type": "SHOOTING_STAR",
+      "prijs": 4473.0
     }
   ],
   "fib": {
@@ -35,8 +39,14 @@
     "61.8": 4313.0,
     "78.6": 4159.0
   },
-  "chart": "charts/2026-08-12_2247_XAUUSD.png",
+  "chart": "charts/2026-08-13_0410_XAUUSD.png",
   "history": [
+    {
+      "tijdstip": "2026-08-13 04:10",
+      "prijs": 4397,
+      "beslissing": "WACHT",
+      "score": 4
+    },
     {
       "tijdstip": "2026-08-12 22:47",
       "prijs": 4402,
@@ -150,12 +160,6 @@
       "prijs": 4435,
       "beslissing": "LONG",
       "score": 7
-    },
-    {
-      "tijdstip": "2026-08-12 13:57",
-      "prijs": 4431,
-      "beslissing": "LONG",
-      "score": 5
     }
   ]
 }
