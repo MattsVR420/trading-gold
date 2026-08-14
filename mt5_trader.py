@@ -46,7 +46,7 @@ def load_state():
         with open(STATE_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return {"last_tijdstip": None}
+        return {"last_key": None}
 
 
 def save_state(state):
@@ -55,12 +55,14 @@ def save_state(state):
 
 
 def get_filling_mode(symbol):
+    # SYMBOL_FILLING_FOK=1, SYMBOL_FILLING_IOC=2 (bitmask op symbol_info().filling_mode) —
+    # deze MetaTrader5-package-versie exporteert deze niet als named constants.
     info = mt5.symbol_info(symbol)
     if info is None:
         return mt5.ORDER_FILLING_IOC
-    if info.filling_mode & mt5.SYMBOL_FILLING_FOK:
+    if info.filling_mode & 1:
         return mt5.ORDER_FILLING_FOK
-    if info.filling_mode & mt5.SYMBOL_FILLING_IOC:
+    if info.filling_mode & 2:
         return mt5.ORDER_FILLING_IOC
     return mt5.ORDER_FILLING_RETURN
 
@@ -198,14 +200,16 @@ def main():
                 continue
 
             state = load_state()
-            tijdstip = signal.get("tijdstip")
+            # Tijdstip heeft enkel minuutprecisie — combineer met beslissing/score/prijs
+            # zodat twee analyses binnen dezelfde minuut niet als "al gezien" gelden.
+            signal_key = [signal.get("tijdstip"), signal.get("beslissing"), signal.get("score"), signal.get("prijs")]
 
-            if tijdstip == state.get("last_tijdstip"):
+            if signal_key == state.get("last_key"):
                 time.sleep(POLL_INTERVAL)
                 continue
 
             process_signal(signal, state)
-            state["last_tijdstip"] = tijdstip
+            state["last_key"] = signal_key
             save_state(state)
 
         except KeyboardInterrupt:
