@@ -151,6 +151,22 @@ def next_liquidity_targets(price, levels, direction):
     tp2 = cands[1] if len(cands) > 1 else None
     return tp1, tp2
 
+WA_MIN_INTERVAL_MINUTES = 15  # min. tijd tussen WhatsApp-verzendingen — voorkomt Twilio rate-limit (429)
+
+def load_last_wa_sent():
+    """Leest last_wa_sent uit de vorige latest.json — geen apart state-bestand nodig."""
+    try:
+        with open('latest.json', encoding='utf-8') as f:
+            return json.load(f).get('last_wa_sent')
+    except Exception:
+        return None
+
+def wa_throttle_ok(last_sent):
+    if not last_sent:
+        return True
+    elapsed_min = (datetime.now(timezone.utc) - datetime.fromisoformat(last_sent)).total_seconds() / 60
+    return elapsed_min >= WA_MIN_INTERVAL_MINUTES
+
 def send_wa(msg):
     try:
         with open('creds.json') as f:
@@ -469,10 +485,15 @@ else:
         f'github.com/MattsVR420/trading-gold'
     )
 
-try:
-    send_wa(wa_msg)
-except Exception as e:
-    print(f'WA FOUT: {e}')
+last_wa_sent = load_last_wa_sent()
+if dec in ('LONG', 'SHORT') or wa_throttle_ok(last_wa_sent):
+    try:
+        send_wa(wa_msg)
+    except Exception as e:
+        print(f'WA FOUT: {e}')
+    last_wa_sent = datetime.now(timezone.utc).isoformat()
+else:
+    print(f'WA overgeslagen (throttle — laatste verzending < {WA_MIN_INTERVAL_MINUTES} min geleden)')
 
 # === GRAFIEK ===
 cfile = ''
@@ -664,6 +685,7 @@ try:
         'reversal_confirmed': reversal_confirmed, 'entry_confirmed': entry_confirmed,
         'dxy_trend': dxy_trend_5m, 'correlatie_ok': correlation_ok,
         'liq_highs': liq_highs, 'liq_lows': liq_lows,
+        'last_wa_sent': last_wa_sent,
         'history': history
     }
     with open('latest.json', 'w', encoding='utf-8') as jf:

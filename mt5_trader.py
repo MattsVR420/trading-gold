@@ -4,7 +4,7 @@ Draai dit script terwijl MT5 open staat op je PC.
 """
 
 import MetaTrader5 as mt5
-import urllib.request, json, time, logging, sys, math
+import urllib.request, json, time, logging, sys
 from datetime import datetime
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -12,8 +12,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 # ─── CONFIG (pas hier aan) ───────────────────────────────────────────────────
 SYMBOL          = "XAUUSD-STD"  # VT Markets (Pty) Ltd — "XAUUSD" bestaat niet bij deze broker
-RISK_PERCENT    = 2.0         # % van account-equity risico per trade — lot wordt hierop berekend
-PROFIT_CAP_PERCENT = 5.0      # sluit een trade automatisch bij dit % winst t.o.v. balance
+RISK_PERCENT    = 5.0         # max % van account-equity risico voor de twee lots samen
+LOT_PER_LEG     = 0.01        # vaste lotgrootte per been — elk signaal opent 2 posities van deze grootte
+TP1_PROFIT_PERCENT = 5.0      # been 1 sluit bij dit % winst t.o.v. balance
+TP2_PROFIT_PERCENT = 10.0     # been 2 sluit bij dit % winst t.o.v. balance
 DEVIATION       = 30          # Max slippage in punten
 POLL_INTERVAL   = 60          # Seconden tussen checks van het signaal
 GITHUB_URL      = "https://raw.githubusercontent.com/MattsVR420/trading-gold/main/latest.json"
@@ -68,26 +70,15 @@ def get_filling_mode(symbol):
     return mt5.ORDER_FILLING_RETURN
 
 
-def get_open_position():
+def get_open_positions():
     positions = mt5.positions_get(symbol=SYMBOL)
-    return positions[0] if positions else None
+    if not positions:
+        return []
+    return [p for p in positions if p.magic == MAGIC]
 
 
-def calculate_lot(sl_distance):
-    """Lotgrootte zodat een SL-hit ~RISK_PERCENT% van de equity kost."""
-    info = mt5.account_info()
-    sym = mt5.symbol_info(SYMBOL)
-    if info is None or sym is None or sl_distance <= 0:
-        return None
-    risk_amount = info.equity * (RISK_PERCENT / 100)
-    raw_lot = risk_amount / (sl_distance * sym.trade_contract_size)
-    lot = math.floor(raw_lot / sym.volume_step) * sym.volume_step
-    lot = round(lot, 2)
-    if lot < sym.volume_min:
-        return None
-    if sym.volume_max and lot > sym.volume_max:
-        lot = sym.volume_max
-    return lot
+def get_leg(positions, tag):
+    return next((p for p in positions if tag in p.comment), None)
 
 
 def close_position(position):
@@ -119,83 +110,128 @@ def close_position(position):
     return False
 
 
-def open_trade(decision, sl, tp1):
-    tick = mt5.symbol_info_tick(SYMBOL)
-    if not tick:
-        log.error("Geen tick data — kan niet openen")
-        return False
-    is_long = decision == "LONG"
-    order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
-    price = tick.ask if is_long else tick.bid
-    sl_distance = abs(price - float(sl))
-    lot = calculate_lot(sl_distance)
-    if lot is None:
-        log.warning(f"Trade OVERGESLAGEN: {RISK_PERCENT}% risico op SL-afstand {sl_distance:.2f} vereist minder dan de minimale lotgrootte — te riskant voor dit account.")
-        return False
+def open_leg(decision, order_type, price, sl, tag):
     request = {
         "action":       mt5.TRADE_ACTION_DEAL,
         "symbol":       SYMBOL,
-        "volume":       lot,
+        "volume":       LOT_PER_LEG,
         "type":         order_type,
         "price":        price,
         "sl":           float(sl),
-        "tp":           float(tp1),
         "deviation":    DEVIATION,
         "magic":        MAGIC,
-        "comment":      f"MVR {decision}",
+        "comment":      f"MVR {tag} {decision}",
         "type_time":    mt5.ORDER_TIME_GTC,
         "type_filling": get_filling_mode(SYMBOL),
     }
     result = mt5.order_send(request)
     if result.retcode == mt5.TRADE_RETCODE_DONE:
-        log.info(f"Trade GEOPEND: {decision} @ {price:.2f} | SL={sl} | TP1={tp1} | lot={lot} (risico {RISK_PERCENT}%)")
+        log.info(f"Trade GEOPEND ({tag}): {decision} @ {price:.2f} | SL={sl} | lot={LOT_PER_LEG}")
         return True
-    log.error(f"Openen mislukt: code={result.retcode} — {result.comment}")
+    log.error(f"Openen mislukt ({tag}): code={result.retcode} — {result.comment}")
+    return False
+
+
+def open_trade(decision, sl):
+    tick = mt5.symbol_info_tick(SYMBOL)
+    if not tick:
+        log.error("Geen tick data — kan niet openen")
+        return False
+    info = mt5.account_info()
+    sym = mt5.symbol_info(SYMBOL)
+    if info is None or sym is None:
+        log.error("Kan risico niet berekenen — geen account/symbol info")
+        return False
+
+    is_long = decision == "LONG"
+    order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
+    price = tick.ask if is_long else tick.bid
+    sl_distance = abs(price - float(sl))
+    if sl_distance <= 0:
+        log.error("Ongeldige SL-afstand — kan niet openen")
+        return False
+
+    totaal_lot = LOT_PER_LEG * 2
+    totaal_risico = sl_distance * sym.trade_contract_size * totaal_lot
+    max_risico = info.equity * (RISK_PERCENT / 100)
+    if totaal_risico > max_risico:
+        log.warning(f"Trade OVERGESLAGEN: risico van 2x{LOT_PER_LEG} lot (~{totaal_risico:.2f}) overschrijdt {RISK_PERCENT}% van equity (~{max_risico:.2f}).")
+        return False
+
+    ok1 = open_leg(decision, order_type, price, sl, "L1")
+    ok2 = open_leg(decision, order_type, price, sl, "L2")
+    return ok1 or ok2
+
+
+def move_sl_to_breakeven(position):
+    request = {
+        "action":   mt5.TRADE_ACTION_SLTP,
+        "position": position.ticket,
+        "symbol":   SYMBOL,
+        "sl":       position.price_open,
+        "tp":       position.tp,
+    }
+    result = mt5.order_send(request)
+    if result.retcode == mt5.TRADE_RETCODE_DONE:
+        log.info(f"SL verplaatst naar breakeven ({position.price_open}) voor ticket={position.ticket}")
+        return True
+    log.error(f"SL naar breakeven mislukt: code={result.retcode} — {result.comment}")
     return False
 
 
 def check_profit_cap():
-    """Sluit de open positie zodra de winst PROFIT_CAP_PERCENT% van de balance bereikt."""
-    position = get_open_position()
-    if not position:
+    """Been 1 sluit bij TP1_PROFIT_PERCENT% winst (en zet been 2 op breakeven);
+    been 2 sluit bij TP2_PROFIT_PERCENT% winst — beide t.o.v. de balance."""
+    positions = get_open_positions()
+    if not positions:
         return
     info = mt5.account_info()
     if not info:
         return
-    target = info.balance * (PROFIT_CAP_PERCENT / 100)
-    if position.profit >= target:
-        log.info(f"Winstdoel bereikt: {position.profit:.2f} >= {target:.2f} ({PROFIT_CAP_PERCENT}% van balance) — sluit trade")
-        close_position(position)
+
+    leg1 = get_leg(positions, "L1")
+    leg2 = get_leg(positions, "L2")
+    target1 = info.balance * (TP1_PROFIT_PERCENT / 100)
+    target2 = info.balance * (TP2_PROFIT_PERCENT / 100)
+
+    if leg1 and leg1.profit >= target1:
+        log.info(f"L1 winstdoel bereikt: {leg1.profit:.2f} >= {target1:.2f} ({TP1_PROFIT_PERCENT}% van balance) — sluit L1")
+        if close_position(leg1) and leg2:
+            move_sl_to_breakeven(leg2)
+
+    if leg2 and leg2.profit >= target2:
+        log.info(f"L2 winstdoel bereikt: {leg2.profit:.2f} >= {target2:.2f} ({TP2_PROFIT_PERCENT}% van balance) — sluit L2")
+        close_position(leg2)
 
 
 def process_signal(signal, state):
     decision = signal.get("beslissing")
     score    = signal.get("score", 0)
     sl       = signal.get("sl")
-    tp1      = signal.get("tp1")
     prijs    = signal.get("prijs")
 
     log.info(f"Nieuw signaal — {decision} | score={score} | prijs=${prijs}")
 
-    position = get_open_position()
+    positions = get_open_positions()
 
     if decision in ("LONG", "SHORT"):
-        if position:
-            pos_is_long = position.type == mt5.POSITION_TYPE_BUY
+        if positions:
+            pos_is_long = positions[0].type == mt5.POSITION_TYPE_BUY
             sig_is_long = decision == "LONG"
             if pos_is_long != sig_is_long:
-                log.info("Richting omgekeerd — sluit bestaande positie en open nieuwe")
-                if close_position(position):
-                    time.sleep(2)
-                    open_trade(decision, sl, tp1)
+                log.info("Richting omgekeerd — sluit bestaande posities en open nieuwe")
+                for p in positions:
+                    close_position(p)
+                time.sleep(2)
+                open_trade(decision, sl)
             else:
-                log.info(f"Al een {decision} positie open (ticket={position.ticket}) — geen actie")
+                log.info(f"Al een {decision} positie open ({len(positions)} lot(s)) — geen actie")
         else:
-            open_trade(decision, sl, tp1)
+            open_trade(decision, sl)
     else:
-        # WACHT — bestaande trade open laten, MT5 beheert SL/TP zelf
-        if position:
-            log.info(f"WACHT signaal — positie ticket={position.ticket} blijft open")
+        # WACHT — bestaande trades open laten, check_profit_cap beheert de winstdoelen
+        if positions:
+            log.info(f"WACHT signaal — {len(positions)} positie(s) blijven open")
         else:
             log.info("WACHT signaal — geen open positie")
 
@@ -203,7 +239,7 @@ def process_signal(signal, state):
 def main():
     log.info("═" * 60)
     log.info("MVR MT5 Trader gestart")
-    log.info(f"Symbool: {SYMBOL} | Risico per trade: {RISK_PERCENT}% | Winstdoel: {PROFIT_CAP_PERCENT}% | Poll: {POLL_INTERVAL}s")
+    log.info(f"Symbool: {SYMBOL} | Risico: {RISK_PERCENT}% (2x{LOT_PER_LEG} lot) | TP1: {TP1_PROFIT_PERCENT}% | TP2: {TP2_PROFIT_PERCENT}% | Poll: {POLL_INTERVAL}s")
     log.info("═" * 60)
 
     if not mt5.initialize():
