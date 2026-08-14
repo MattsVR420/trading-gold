@@ -7,8 +7,11 @@ import MetaTrader5 as mt5
 import urllib.request, json, time, logging, sys
 from datetime import datetime
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 # ─── CONFIG (pas hier aan) ───────────────────────────────────────────────────
-SYMBOL          = "XAUUSD"    # Brokers gebruiken soms "XAUUSDm" of "GOLD" — controleer in MT5
+SYMBOL          = "XAUUSD-STD"  # VT Markets (Pty) Ltd — "XAUUSD" bestaat niet bij deze broker
 LOT             = 0.01        # Lotgrootte per trade (start klein, pas aan naar wens)
 DEVIATION       = 30          # Max slippage in punten
 POLL_INTERVAL   = 60          # Seconden tussen checks van het signaal
