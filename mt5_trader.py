@@ -4,7 +4,7 @@ Draai dit script terwijl MT5 open staat op je PC.
 """
 
 import MetaTrader5 as mt5
-import urllib.request, json, time, logging, sys
+import urllib.request, json, time, logging, sys, math
 from datetime import datetime
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -12,7 +12,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 # ─── CONFIG (pas hier aan) ───────────────────────────────────────────────────
 SYMBOL          = "XAUUSD-STD"  # VT Markets (Pty) Ltd — "XAUUSD" bestaat niet bij deze broker
-LOT             = 0.01        # Lotgrootte per trade (start klein, pas aan naar wens)
+RISK_PERCENT    = 2.0         # % van account-equity risico per trade — lot wordt hierop berekend
+PROFIT_CAP_PERCENT = 5.0      # sluit een trade automatisch bij dit % winst t.o.v. balance
 DEVIATION       = 30          # Max slippage in punten
 POLL_INTERVAL   = 60          # Seconden tussen checks van het signaal
 GITHUB_URL      = "https://raw.githubusercontent.com/MattsVR420/trading-gold/main/latest.json"
@@ -72,6 +73,23 @@ def get_open_position():
     return positions[0] if positions else None
 
 
+def calculate_lot(sl_distance):
+    """Lotgrootte zodat een SL-hit ~RISK_PERCENT% van de equity kost."""
+    info = mt5.account_info()
+    sym = mt5.symbol_info(SYMBOL)
+    if info is None or sym is None or sl_distance <= 0:
+        return None
+    risk_amount = info.equity * (RISK_PERCENT / 100)
+    raw_lot = risk_amount / (sl_distance * sym.trade_contract_size)
+    lot = math.floor(raw_lot / sym.volume_step) * sym.volume_step
+    lot = round(lot, 2)
+    if lot < sym.volume_min:
+        return None
+    if sym.volume_max and lot > sym.volume_max:
+        lot = sym.volume_max
+    return lot
+
+
 def close_position(position):
     tick = mt5.symbol_info_tick(SYMBOL)
     if not tick:
@@ -109,10 +127,15 @@ def open_trade(decision, sl, tp1):
     is_long = decision == "LONG"
     order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
     price = tick.ask if is_long else tick.bid
+    sl_distance = abs(price - float(sl))
+    lot = calculate_lot(sl_distance)
+    if lot is None:
+        log.warning(f"Trade OVERGESLAGEN: {RISK_PERCENT}% risico op SL-afstand {sl_distance:.2f} vereist minder dan de minimale lotgrootte — te riskant voor dit account.")
+        return False
     request = {
         "action":       mt5.TRADE_ACTION_DEAL,
         "symbol":       SYMBOL,
-        "volume":       LOT,
+        "volume":       lot,
         "type":         order_type,
         "price":        price,
         "sl":           float(sl),
@@ -125,10 +148,24 @@ def open_trade(decision, sl, tp1):
     }
     result = mt5.order_send(request)
     if result.retcode == mt5.TRADE_RETCODE_DONE:
-        log.info(f"Trade GEOPEND: {decision} @ {price:.2f} | SL={sl} | TP1={tp1} | lot={LOT}")
+        log.info(f"Trade GEOPEND: {decision} @ {price:.2f} | SL={sl} | TP1={tp1} | lot={lot} (risico {RISK_PERCENT}%)")
         return True
     log.error(f"Openen mislukt: code={result.retcode} — {result.comment}")
     return False
+
+
+def check_profit_cap():
+    """Sluit de open positie zodra de winst PROFIT_CAP_PERCENT% van de balance bereikt."""
+    position = get_open_position()
+    if not position:
+        return
+    info = mt5.account_info()
+    if not info:
+        return
+    target = info.balance * (PROFIT_CAP_PERCENT / 100)
+    if position.profit >= target:
+        log.info(f"Winstdoel bereikt: {position.profit:.2f} >= {target:.2f} ({PROFIT_CAP_PERCENT}% van balance) — sluit trade")
+        close_position(position)
 
 
 def process_signal(signal, state):
@@ -166,7 +203,7 @@ def process_signal(signal, state):
 def main():
     log.info("═" * 60)
     log.info("MVR MT5 Trader gestart")
-    log.info(f"Symbool: {SYMBOL} | Lot: {LOT} | Poll: {POLL_INTERVAL}s")
+    log.info(f"Symbool: {SYMBOL} | Risico per trade: {RISK_PERCENT}% | Winstdoel: {PROFIT_CAP_PERCENT}% | Poll: {POLL_INTERVAL}s")
     log.info("═" * 60)
 
     if not mt5.initialize():
@@ -194,6 +231,8 @@ def main():
 
     while True:
         try:
+            check_profit_cap()
+
             signal = fetch_signal()
             if not signal:
                 time.sleep(POLL_INTERVAL)
