@@ -9,10 +9,12 @@ ASSETS = [
     {'key': 'BTCUSD', 'yf_ticker': 'BTC-USD', 'decimals': 0, 'name': 'BTCUSD (Bitcoin)'},
     {'key': 'XRPUSD', 'yf_ticker': 'XRP-USD', 'decimals': 4, 'name': 'XRPUSD (Ripple)'},
 ]
-# Correlatiefilter — vervangt TJR's ES/NASDAQ alignment-check. Enkel voor XAUUSD (vs DXY,
-# omgekeerd gecorreleerd). BTC en XRP hebben geen kruiscorrelatie-eis — elk beslist zelfstandig.
+# Correlatiefilter per asset — vervangt TJR's ES/NASDAQ alignment-check.
+# XAUUSD vs DXY is omgekeerd gecorreleerd; BTC/XRP zijn onderling gelijk gecorreleerd.
 CORR_MAP = {
-    'XAUUSD': {'label': 'DXY', 'source': 'dxy', 'inverse': True},
+    'XAUUSD': {'label': 'DXY', 'source': 'dxy',    'inverse': True},
+    'BTCUSD': {'label': 'XRP', 'source': 'XRPUSD',  'inverse': False},
+    'XRPUSD': {'label': 'BTC', 'source': 'BTCUSD',  'inverse': False},
 }
 
 # === HULPFUNCTIES ===
@@ -373,25 +375,21 @@ for cfg in ASSETS:
     elif reversal_confirmed and manip_bias == 'BULLISH':
         entry_confirmed = bos_sequence_confirms(m1, 'BOS_BEARISH', 'BOS_BULLISH')
 
-    # Correlatiefilter — enkel voor assets in CORR_MAP (XAUUSD). Assets zonder entry hier
-    # (BTCUSD, XRPUSD) hebben geen kruiscorrelatie-eis en beslissen zelfstandig.
-    corr_cfg = CORR_MAP.get(key)
-    corr_trend_5m = None
-    correlation_ok = True
-    if corr_cfg:
-        corr_trend_5m = 'ONBEKEND'
-        correlation_ok = False
-        try:
-            corr_df = dxy if corr_cfg['source'] == 'dxy' else raw[corr_cfg['source']]['m5']
-            if not corr_df.empty:
-                corr_trend_5m = trend(corr_df)
-                if manip_bias in ('BEARISH', 'BULLISH'):
-                    if corr_cfg['inverse']:
-                        correlation_ok = (corr_trend_5m == 'BULLISH') if manip_bias == 'BEARISH' else (corr_trend_5m == 'BEARISH')
-                    else:
-                        correlation_ok = corr_trend_5m == manip_bias
-        except Exception as e:
-            print(f"{key} {corr_cfg['label']} analyse fout: {e}")
+    # Correlatiefilter
+    corr_cfg = CORR_MAP[key]
+    corr_trend_5m = 'ONBEKEND'
+    correlation_ok = False
+    try:
+        corr_df = dxy if corr_cfg['source'] == 'dxy' else raw[corr_cfg['source']]['m5']
+        if not corr_df.empty:
+            corr_trend_5m = trend(corr_df)
+            if manip_bias in ('BEARISH', 'BULLISH'):
+                if corr_cfg['inverse']:
+                    correlation_ok = (corr_trend_5m == 'BULLISH') if manip_bias == 'BEARISH' else (corr_trend_5m == 'BEARISH')
+                else:
+                    correlation_ok = corr_trend_5m == manip_bias
+    except Exception as e:
+        print(f"{key} {corr_cfg['label']} analyse fout: {e}")
 
     steps_confirmed = sum([manip_bias is not None, reversal_confirmed, entry_confirmed, correlation_ok])
     if manip_bias == 'BULLISH':   score = steps_confirmed * 2
@@ -407,9 +405,8 @@ for cfg in ASSETS:
 
     sweep_str = f'{manip_bias} @ {fmt(manip_level, decimals)}' if manip_bias else 'geen sweep gedetecteerd'
     confirm_str = (f'5m reversal: {"OK" if reversal_confirmed else "nee"} | '
-                   f'1m entry: {"OK" if entry_confirmed else "nee"}')
-    if corr_cfg:
-        confirm_str += f" | {corr_cfg['label']} ({corr_trend_5m}): {'OK' if correlation_ok else 'nee'}"
+                   f'1m entry: {"OK" if entry_confirmed else "nee"} | '
+                   f"{corr_cfg['label']} ({corr_trend_5m}): {'OK' if correlation_ok else 'nee'}")
     print(f'{key} liquidity sweep: {sweep_str} | {confirm_str}')
 
     # === ENTRY / SL / TP ===
@@ -448,7 +445,7 @@ for cfg in ASSETS:
         entry = price; sl = round(price - slp, decimals); tp1 = round(price + slp*1.5, decimals); tp2 = round(price + slp*3, decimals)
         rr1 = 1.5; rr2 = 3.0
 
-    urgent = dec in ('LONG', 'SHORT')  # elke LONG/SHORT is per definitie volledig bevestigd
+    urgent = abs(score) >= 8
     near_sr = [l for l in all_sr if abs(l - price) / price < 0.015]
     near_sr_str = ' | '.join([fmt(l, decimals) for l in near_sr[:5]]) if near_sr else 'geen'
     fib_str = (f"23.6%: {fmt(fib['23.6'],decimals)} | 38.2%: {fmt(fib['38.2'],decimals)}\n"
@@ -571,8 +568,7 @@ for cfg in ASSETS:
         f.write(f'- **Manipulatie:** {sweep_str}\n')
         f.write(f'- **5m reversal (BOS/iFVG):** {"bevestigd" if reversal_confirmed else "niet bevestigd"} (iFVG: {ifvg_5m or "geen"})\n')
         f.write(f'- **1m entry trigger:** {"bevestigd" if entry_confirmed else "niet bevestigd"}\n')
-        if corr_cfg:
-            f.write(f"- **{corr_cfg['label']} 5m trend:** {corr_trend_5m} | **Correlatie:** {'OK' if correlation_ok else 'niet aligned'}\n")
+        f.write(f"- **{corr_cfg['label']} 5m trend:** {corr_trend_5m} | **Correlatie:** {'OK' if correlation_ok else 'niet aligned'}\n")
         f.write(f'- **Draws on liquidity (highs):** {liq_highs}\n')
         f.write(f'- **Draws on liquidity (lows):** {liq_lows}\n\n---\n\n')
         if cfile:
@@ -629,7 +625,7 @@ for cfg in ASSETS:
         'fib': fib, 'chart': cfile if cfile else None,
         'manipulatie': manip_bias, 'manip_level': manip_level,
         'reversal_confirmed': reversal_confirmed, 'entry_confirmed': entry_confirmed,
-        'correlatie_label': corr_cfg['label'] if corr_cfg else None, 'correlatie_trend': corr_trend_5m, 'correlatie_ok': correlation_ok,
+        'correlatie_label': corr_cfg['label'], 'correlatie_trend': corr_trend_5m, 'correlatie_ok': correlation_ok,
         'liq_highs': liq_highs, 'liq_lows': liq_lows,
         'history': prev_history,
     }
