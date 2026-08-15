@@ -1,6 +1,6 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-08-15 08:30",
+    "tijdstip": "2026-08-15 08:32",
     "prijs": 4378,
     "beslissing": "WACHT",
     "score": 0,
@@ -24,7 +24,7 @@
       "61.8": 4313.0,
       "78.6": 4159.0
     },
-    "chart": "charts/XAUUSD/2026-08-15_0830_XAUUSD.png",
+    "chart": "charts/XAUUSD/2026-08-15_0832_XAUUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -40,6 +40,12 @@
       4366.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-15 08:32",
+        "prijs": 4378,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-15 08:30",
         "prijs": 4378,
@@ -109,7 +115,7 @@
     ]
   },
   "BTCUSD": {
-    "tijdstip": "2026-08-15 08:30",
+    "tijdstip": "2026-08-15 08:32",
     "prijs": 62983,
     "beslissing": "WACHT",
     "score": 2,
@@ -133,7 +139,7 @@
       "61.8": 65523.0,
       "78.6": 62103.0
     },
-    "chart": "charts/BTCUSD/2026-08-15_0830_BTCUSD.png",
+    "chart": "charts/BTCUSD/2026-08-15_0832_BTCUSD.png",
     "manipulatie": "BULLISH",
     "manip_level": 62977.0,
     "reversal_confirmed": false,
@@ -153,6 +159,12 @@
       62977.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-15 08:32",
+        "prijs": 62983,
+        "beslissing": "WACHT",
+        "score": 2
+      },
       {
         "tijdstip": "2026-08-15 08:30",
         "prijs": 62983,
@@ -222,8 +234,8 @@
     ]
   },
   "XRPUSD": {
-    "tijdstip": "2026-08-15 08:30",
-    "prijs": 1.0025,
+    "tijdstip": "2026-08-15 08:32",
+    "prijs": 1.0022,
     "beslissing": "WACHT",
     "score": -4,
     "entry": null,
@@ -246,7 +258,7 @@
       "61.8": 1.1461,
       "78.6": 1.0767
     },
-    "chart": "charts/XRPUSD/2026-08-15_0830_XRPUSD.png",
+    "chart": "charts/XRPUSD/2026-08-15_0832_XRPUSD.png",
     "manipulatie": "BEARISH",
     "manip_level": 1.003,
     "reversal_confirmed": true,
@@ -266,6 +278,12 @@
       1.0002
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-15 08:32",
+        "prijs": 1.0022,
+        "beslissing": "WACHT",
+        "score": -4
+      },
       {
         "tijdstip": "2026-08-15 08:30",
         "prijs": 1.0025,
@@ -335,5 +353,5 @@
     ]
   },
   "last_wa_sent": "2026-08-15T08:30:58.403143+00:00",
-  "tijdstip": "2026-08-15 08:30"
+  "tijdstip": "2026-08-15 08:32"
 }
