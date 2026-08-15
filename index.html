@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MVR Trading — XAUUSD Live Dashboard</title>
+<title>MVR Trading — Live Dashboard</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:#0b1929; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; }
@@ -19,17 +19,17 @@
 
   .container { max-width:900px; margin:0 auto; padding:16px; }
 
-  /* Live prijs banner */
-  .live-banner { background:#0d2137; border:1px solid #1e3a5f; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
-  .live-price-block { display:flex; align-items:baseline; gap:10px; }
-  .live-label { font-size:11px; color:#9e9e9e; text-transform:uppercase; letter-spacing:1px; }
-  .live-price { font-size:32px; font-weight:700; color:#fff; }
-  .live-change { font-size:14px; font-weight:600; }
-  .live-change.up { color:#26a69a; }
-  .live-change.down { color:#ef5350; }
-  .live-meta { text-align:right; }
-  .live-time { font-size:11px; color:#9e9e9e; }
-  .live-source { font-size:10px; color:#3a5a7f; margin-top:2px; }
+  /* Asset tabs */
+  .asset-tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .asset-tab { flex:1; background:#111e2e; border:1px solid #1e3a5f; border-radius:8px; padding:10px; text-align:center; cursor:pointer; font-size:13px; font-weight:600; color:#9e9e9e; }
+  .asset-tab.active { border-color:#7ab8f5; color:#fff; background:#0d2137; }
+  .asset-tab .tab-dec { font-size:10px; margin-top:2px; }
+  .asset-tab .tab-dec.long  { color:#26a69a; }
+  .asset-tab .tab-dec.short { color:#ef5350; }
+  .asset-tab .tab-dec.wacht { color:#ffd234; }
+
+  .asset-panel { display:none; }
+  .asset-panel.active { display:block; }
 
   /* Status card */
   .status-card { border-radius:12px; padding:18px; margin-bottom:16px; border:1px solid; }
@@ -89,183 +89,148 @@
 <body>
 
 <header>
-  <div class="logo">MVR Trading <span>XAUUSD • Gold</span></div>
+  <div class="logo">MVR Trading <span>XAUUSD • BTCUSD • XRPUSD</span></div>
   <div class="header-right">
     <span class="live-dot"></span>
-    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+    <button class="refresh-btn" onclick="loadDashboard()">↻ Refresh</button>
   </div>
 </header>
 
 <div class="container">
 
-  <!-- LIVE PRIJS -->
-  <div class="live-banner">
-    <div class="live-price-block">
-      <div>
-        <div class="live-label">⚡ Live Goudprijs (XAU/USD)</div>
-        <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px;">
-          <div class="live-price" id="live-price">—</div>
-          <div class="live-change" id="live-change"></div>
-        </div>
-      </div>
-    </div>
-    <div class="live-meta">
-      <div class="live-time" id="live-time">Laden...</div>
-      <div class="live-source">Bijgewerkt elke 30s</div>
-    </div>
-  </div>
+  <div class="asset-tabs" id="asset-tabs"></div>
 
-  <!-- LAATSTE ANALYSE -->
-  <div class="section-title" style="margin-bottom:8px">Laatste 4H Analyse</div>
-  <div id="status-card" class="status-card loading">
-    <p class="loading-txt">Analyse laden...</p>
-  </div>
-
-  <!-- CHART -->
-  <div class="chart-section">
-    <div class="section-title">4H Grafiek</div>
-    <div id="chart-container"><div class="no-chart">Grafiek laden...</div></div>
-  </div>
-
-  <!-- TREND -->
-  <div class="section-title">Trend — Top Down</div>
-  <div class="trend-grid" id="trend-grid">
-    <div class="trend-box"><div class="trend-tf">Weekly</div><div class="trend-val" id="wt">—</div></div>
-    <div class="trend-box"><div class="trend-tf">Daily</div><div class="trend-val" id="dt">—</div></div>
-    <div class="trend-box"><div class="trend-tf">4H</div><div class="trend-val" id="h4t">—</div></div>
-  </div>
-
-  <!-- HISTORY -->
-  <div class="section-title" style="margin-bottom:8px">Analysegeschiedenis</div>
-  <div class="history-list" id="history-list">
-    <div class="loading-txt">Laden...</div>
-  </div>
+  <div id="panels"></div>
 
 </div>
 
 <footer>
-  MVR Trading Agent • Analyse elke 4u • Live prijs elke 30s •
+  MVR Trading Agent • Analyse elke ~30 min •
   <a href="https://github.com/MattsVR420/trading-gold" target="_blank">GitHub</a>
 </footer>
 
 <script>
-let prevPrice = null;
+const ASSETS = [
+  { key: 'XAUUSD', label: 'XAUUSD', decimals: 0, prefix: '$' },
+  { key: 'BTCUSD', label: 'BTCUSD', decimals: 0, prefix: '$' },
+  { key: 'XRPUSD', label: 'XRPUSD', decimals: 4, prefix: '$' },
+];
+let activeAsset = 'XAUUSD';
 
-// === LIVE PRIJS (elke 30 seconden) ===
-async function loadLivePrice() {
-  const apis = [
-    {
-      url: 'https://api.metals.live/v1/spot/gold',
-      parse: d => ({ price: parseFloat(d[0]?.price || d?.price || 0), ok: true })
-    },
-    {
-      url: 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1m&range=1d',
-      parse: d => {
-        const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        return { price: parseFloat(p || 0), ok: !!p };
-      }
-    }
-  ];
+function fmtPrice(v, decimals) {
+  if (v === null || v === undefined) return '—';
+  return decimals > 0 ? Number(v).toFixed(decimals) : Number(v).toLocaleString('nl-BE');
+}
 
-  for (const api of apis) {
-    try {
-      const r = await fetch(api.url, { cache: 'no-store' });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const { price, ok } = api.parse(d);
-      if (!ok || price < 100) continue;
+function buildSkeleton() {
+  const tabsEl = document.getElementById('asset-tabs');
+  const panelsEl = document.getElementById('panels');
+  tabsEl.innerHTML = ASSETS.map(a => `
+    <div class="asset-tab${a.key === activeAsset ? ' active' : ''}" data-asset="${a.key}" onclick="switchAsset('${a.key}')">
+      ${a.label}
+      <div class="tab-dec wacht" id="tabdec-${a.key}">—</div>
+    </div>
+  `).join('');
+  panelsEl.innerHTML = ASSETS.map(a => `
+    <div class="asset-panel${a.key === activeAsset ? ' active' : ''}" id="panel-${a.key}">
+      <div class="section-title" style="margin-bottom:8px">Laatste Analyse — ${a.label}</div>
+      <div id="status-card-${a.key}" class="status-card loading"><p class="loading-txt">Analyse laden...</p></div>
 
-      const el = document.getElementById('live-price');
-      const chEl = document.getElementById('live-change');
-      const timeEl = document.getElementById('live-time');
+      <div class="chart-section">
+        <div class="section-title">4H Grafiek</div>
+        <div id="chart-container-${a.key}"><div class="no-chart">Grafiek laden...</div></div>
+      </div>
 
-      if (prevPrice !== null) {
-        const diff = price - prevPrice;
-        const pct = ((diff / prevPrice) * 100).toFixed(2);
-        const sign = diff >= 0 ? '+' : '';
-        chEl.textContent = `${sign}$${diff.toFixed(1)} (${sign}${pct}%)`;
-        chEl.className = 'live-change ' + (diff >= 0 ? 'up' : 'down');
-      }
+      <div class="section-title">Trend — Top Down</div>
+      <div class="trend-grid" id="trend-grid-${a.key}">
+        <div class="trend-box"><div class="trend-tf">Weekly</div><div class="trend-val" id="wt-${a.key}">—</div></div>
+        <div class="trend-box"><div class="trend-tf">Daily</div><div class="trend-val" id="dt-${a.key}">—</div></div>
+        <div class="trend-box"><div class="trend-tf">4H</div><div class="trend-val" id="h4t-${a.key}">—</div></div>
+      </div>
 
-      el.textContent = '$' + price.toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      prevPrice = price;
+      <div class="section-title" style="margin-bottom:8px">Analysegeschiedenis</div>
+      <div class="history-list" id="history-list-${a.key}"><div class="loading-txt">Laden...</div></div>
+    </div>
+  `).join('');
+}
 
-      const now = new Date();
-      timeEl.textContent = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (lokaal)';
-      return;
-    } catch(e) {}
+function switchAsset(key) {
+  activeAsset = key;
+  document.querySelectorAll('.asset-tab').forEach(el => el.classList.toggle('active', el.dataset.asset === key));
+  document.querySelectorAll('.asset-panel').forEach(el => el.classList.toggle('active', el.id === `panel-${key}`));
+}
+
+function renderAsset(a, d) {
+  if (!d) {
+    document.getElementById(`status-card-${a.key}`).innerHTML =
+      `<p style="color:#9e9e9e;padding:10px;font-size:13px">Nog geen analyse beschikbaar voor ${a.label}.</p>`;
+    return;
+  }
+  const dec = (d.beslissing || 'WACHT').toUpperCase();
+  const cls = dec === 'LONG' ? 'long' : dec === 'SHORT' ? 'short' : 'wacht';
+
+  const tabDec = document.getElementById(`tabdec-${a.key}`);
+  tabDec.textContent = dec;
+  tabDec.className = `tab-dec ${cls}`;
+
+  document.getElementById(`status-card-${a.key}`).className = `status-card ${cls}`;
+  document.getElementById(`status-card-${a.key}`).innerHTML = `
+    <div class="status-top">
+      <div class="beslissing ${cls}">${dec}</div>
+      <div class="analyse-prijs">Analyse op ${a.prefix}${fmtPrice(d.prijs, a.decimals)}</div>
+      <div class="score-badge">Score: ${d.score >= 0 ? '+' : ''}${d.score || 0}</div>
+    </div>
+    <div class="timestamp">Laatste analyse: ${d.tijdstip || '—'} UTC</div>
+    ${dec !== 'WACHT' ? `
+    <div class="levels-grid">
+      <div class="level-box"><div class="level-label">Entry</div><div class="level-value entry">${a.prefix}${fmtPrice(d.entry, a.decimals)}</div></div>
+      <div class="level-box"><div class="level-label">Stop Loss</div><div class="level-value sl">${a.prefix}${fmtPrice(d.sl, a.decimals)}</div></div>
+      <div class="level-box"><div class="level-label">TP1 (min 1.5R)</div><div class="level-value tp1">${a.prefix}${fmtPrice(d.tp1, a.decimals)}</div></div>
+      <div class="level-box"><div class="level-label">TP2 (max 5R)</div><div class="level-value tp2">${a.prefix}${fmtPrice(d.tp2, a.decimals)}</div></div>
+    </div>` : `<div style="margin-top:10px;color:#9e9e9e;font-size:12px">Geen actieve trade — wacht op confluëntie (score ${d.score >= 0 ? '+' : ''}${d.score}).</div>`}
+  `;
+
+  if (d.chart) {
+    document.getElementById(`chart-container-${a.key}`).innerHTML =
+      `<img src="${d.chart}?t=${Date.now()}" class="chart-img" alt="${a.key} Chart"
+        onerror="this.parentElement.innerHTML='<div class=no-chart>Grafiek tijdelijk niet beschikbaar</div>'">`;
+  }
+
+  [['wt','weekly_trend'], ['dt','daily_trend'], ['h4t','h4_trend']].forEach(([id, field]) => {
+    const el = document.getElementById(`${id}-${a.key}`);
+    const v = (d[field] || 'NEUTRAAL').toUpperCase();
+    el.textContent = v.includes('BULL') ? '▲ BULLISH' : v.includes('BEAR') ? '▼ BEARISH' : '→ NEUTRAAL';
+    el.className = 'trend-val ' + (v.includes('BULL') ? 'bullish' : v.includes('BEAR') ? 'bearish' : 'neutraal');
+  });
+
+  if (d.history && d.history.length) {
+    document.getElementById(`history-list-${a.key}`).innerHTML = d.history.slice(0, 10).map(h => {
+      const hcls = (h.beslissing || '').includes('LONG') ? 'long' : (h.beslissing || '').includes('SHORT') ? 'short' : 'wacht';
+      return `<div class="history-item">
+        <span class="history-time">${h.tijdstip} UTC</span>
+        <span class="history-price">${a.prefix}${fmtPrice(h.prijs, a.decimals)}</span>
+        <span class="history-dec ${hcls}">${h.beslissing}</span>
+      </div>`;
+    }).join('');
   }
 }
 
-// === ANALYSE DATA (elke 5 minuten) ===
 async function loadDashboard() {
   try {
     const r = await fetch('latest.json?t=' + Date.now());
     if (!r.ok) throw new Error('Geen data');
     const d = await r.json();
-
-    const dec = (d.beslissing || 'WACHT').toUpperCase();
-    const cls = dec === 'LONG' ? 'long' : dec === 'SHORT' ? 'short' : 'wacht';
-
-    document.getElementById('status-card').className = `status-card ${cls}`;
-    document.getElementById('status-card').innerHTML = `
-      <div class="status-top">
-        <div class="beslissing ${cls}">${dec}</div>
-        <div class="analyse-prijs">Analyse op $${d.prijs || '—'}</div>
-        <div class="score-badge">Score: ${d.score >= 0 ? '+' : ''}${d.score || 0}</div>
-      </div>
-      <div class="timestamp">Laatste analyse: ${d.tijdstip || '—'} UTC</div>
-      ${dec !== 'WACHT' ? `
-      <div class="levels-grid">
-        <div class="level-box"><div class="level-label">Entry</div><div class="level-value entry">$${d.entry || '—'}</div></div>
-        <div class="level-box"><div class="level-label">Stop Loss</div><div class="level-value sl">$${d.sl || '—'}</div></div>
-        <div class="level-box"><div class="level-label">TP1 (1:1.5)</div><div class="level-value tp1">$${d.tp1 || '—'}</div></div>
-        <div class="level-box"><div class="level-label">TP2 (1:3)</div><div class="level-value tp2">$${d.tp2 || '—'}</div></div>
-      </div>` : `<div style="margin-top:10px;color:#9e9e9e;font-size:12px">Geen actieve trade — wacht op confluëntie (score ${d.score >= 0 ? '+' : ''}${d.score}).</div>`}
-    `;
-
-    if (d.chart) {
-      document.getElementById('chart-container').innerHTML =
-        `<img src="${d.chart}?t=${Date.now()}" class="chart-img" alt="XAUUSD Chart"
-          onerror="this.parentElement.innerHTML='<div class=no-chart>Grafiek tijdelijk niet beschikbaar</div>'">`;
-    }
-
-    const trendData = [
-      { id: 'wt', val: d.weekly_trend },
-      { id: 'dt', val: d.daily_trend },
-      { id: 'h4t', val: d.h4_trend }
-    ];
-    trendData.forEach(({ id, val }) => {
-      const el = document.getElementById(id);
-      const v = (val || 'NEUTRAAL').toUpperCase();
-      el.textContent = v.includes('BULL') ? '▲ BULLISH' : v.includes('BEAR') ? '▼ BEARISH' : '→ NEUTRAAL';
-      el.className = 'trend-val ' + (v.includes('BULL') ? 'bullish' : v.includes('BEAR') ? 'bearish' : 'neutraal');
-    });
-
-    if (d.history && d.history.length) {
-      document.getElementById('history-list').innerHTML = d.history.slice(0, 10).map(h => {
-        const hcls = (h.beslissing || '').includes('LONG') ? 'long' : (h.beslissing || '').includes('SHORT') ? 'short' : 'wacht';
-        return `<div class="history-item">
-          <span class="history-time">${h.tijdstip} UTC</span>
-          <span class="history-price">$${h.prijs}</span>
-          <span class="history-dec ${hcls}">${h.beslissing}</span>
-        </div>`;
-      }).join('');
-    }
+    ASSETS.forEach(a => renderAsset(a, d[a.key]));
   } catch(e) {
-    document.getElementById('status-card').innerHTML =
-      `<p style="color:#9e9e9e;padding:10px;font-size:13px">Analyse even niet beschikbaar.<br><small>${e.message}</small></p>`;
+    ASSETS.forEach(a => {
+      document.getElementById(`status-card-${a.key}`).innerHTML =
+        `<p style="color:#9e9e9e;padding:10px;font-size:13px">Analyse even niet beschikbaar.<br><small>${e.message}</small></p>`;
+    });
   }
 }
 
-function loadAll() {
-  loadLivePrice();
-  loadDashboard();
-}
-
-// Start
-loadAll();
-setInterval(loadLivePrice, 30000);   // live prijs elke 30s
+buildSkeleton();
+loadDashboard();
 setInterval(loadDashboard, 300000);  // analyse elke 5 min
 </script>
 </body>
