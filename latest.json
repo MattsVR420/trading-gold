@@ -1,6 +1,6 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-08-15 05:23",
+    "tijdstip": "2026-08-15 05:27",
     "prijs": 4378,
     "beslissing": "WACHT",
     "score": 0,
@@ -24,7 +24,7 @@
       "61.8": 4313.0,
       "78.6": 4159.0
     },
-    "chart": "charts/XAUUSD/2026-08-15_0523_XAUUSD.png",
+    "chart": "charts/XAUUSD/2026-08-15_0527_XAUUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -41,6 +41,12 @@
     ],
     "history": [
       {
+        "tijdstip": "2026-08-15 05:27",
+        "prijs": 4378,
+        "beslissing": "WACHT",
+        "score": 0
+      },
+      {
         "tijdstip": "2026-08-15 05:23",
         "prijs": 4378,
         "beslissing": "WACHT",
@@ -55,8 +61,8 @@
     ]
   },
   "BTCUSD": {
-    "tijdstip": "2026-08-15 05:23",
-    "prijs": 63065,
+    "tijdstip": "2026-08-15 05:27",
+    "prijs": 63058,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -79,7 +85,7 @@
       "61.8": 65690.0,
       "78.6": 62197.0
     },
-    "chart": "charts/BTCUSD/2026-08-15_0523_BTCUSD.png",
+    "chart": "charts/BTCUSD/2026-08-15_0527_BTCUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -93,10 +99,16 @@
       63931.0
     ],
     "liq_lows": [
-      62480.0,
+      62484.0,
       62924.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-15 05:27",
+        "prijs": 63058,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-15 05:23",
         "prijs": 63065,
@@ -112,8 +124,8 @@
     ]
   },
   "XRPUSD": {
-    "tijdstip": "2026-08-15 05:23",
-    "prijs": 1.0051,
+    "tijdstip": "2026-08-15 05:27",
+    "prijs": 1.0052,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -136,7 +148,7 @@
       "61.8": 1.159,
       "78.6": 1.0863
     },
-    "chart": "charts/XRPUSD/2026-08-15_0523_XRPUSD.png",
+    "chart": "charts/XRPUSD/2026-08-15_0527_XRPUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -150,10 +162,16 @@
       1.0133
     ],
     "liq_lows": [
-      0.988,
+      0.9876,
       0.9973
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-15 05:27",
+        "prijs": 1.0052,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-15 05:23",
         "prijs": 1.0051,
@@ -169,5 +187,5 @@
     ]
   },
   "last_wa_sent": "2026-08-15T05:23:32.636686+00:00",
-  "tijdstip": "2026-08-15 05:23"
+  "tijdstip": "2026-08-15 05:27"
 }
