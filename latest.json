@@ -1,7 +1,7 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-08-17 21:45",
-    "prijs": 4473,
+    "tijdstip": "2026-08-17 21:47",
+    "prijs": 4418,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -24,7 +24,7 @@
       "61.8": 4313.0,
       "78.6": 4159.0
     },
-    "chart": "charts/XAUUSD/2026-08-17_2145_XAUUSD.png",
+    "chart": "charts/XAUUSD/2026-08-17_2147_XAUUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -45,6 +45,12 @@
       4443.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-17 21:47",
+        "prijs": 4418,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-17 21:45",
         "prijs": 4473,
@@ -158,18 +164,12 @@
         "prijs": 4422,
         "beslissing": "WACHT",
         "score": 0
-      },
-      {
-        "tijdstip": "2026-08-17 14:51",
-        "prijs": 4418,
-        "beslissing": "WACHT",
-        "score": 4
       }
     ]
   },
   "BTCUSD": {
-    "tijdstip": "2026-08-17 21:45",
-    "prijs": 64288,
+    "tijdstip": "2026-08-17 21:47",
+    "prijs": 64320,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -192,7 +192,7 @@
       "61.8": 65523.0,
       "78.6": 62103.0
     },
-    "chart": "charts/BTCUSD/2026-08-17_2145_BTCUSD.png",
+    "chart": "charts/BTCUSD/2026-08-17_2147_BTCUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -202,8 +202,9 @@
     "correlatie_ok": false,
     "liq_highs": [
       63653.0,
-      63716.0,
-      64558.0
+      63713.0,
+      64558.0,
+      64562.0
     ],
     "liq_lows": [
       62643.0,
@@ -212,6 +213,12 @@
       63357.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-17 21:47",
+        "prijs": 64320,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-17 21:45",
         "prijs": 64288,
@@ -325,17 +332,11 @@
         "prijs": 63849,
         "beslissing": "WACHT",
         "score": -2
-      },
-      {
-        "tijdstip": "2026-08-17 14:51",
-        "prijs": 63688,
-        "beslissing": "WACHT",
-        "score": 0
       }
     ]
   },
   "XRPUSD": {
-    "tijdstip": "2026-08-17 21:45",
+    "tijdstip": "2026-08-17 21:47",
     "prijs": 1.0019,
     "beslissing": "WACHT",
     "score": -2,
@@ -346,7 +347,7 @@
     "weekly_trend": "BEARISH",
     "daily_trend": "NEUTRAAL",
     "h4_trend": "NEUTRAAL",
-    "h1_trend": "NEUTRAAL",
+    "h1_trend": "BULLISH",
     "m30_trend": "BULLISH",
     "bos_h4": null,
     "bos_h1": null,
@@ -359,7 +360,7 @@
       "61.8": 1.1394,
       "78.6": 1.073
     },
-    "chart": "charts/XRPUSD/2026-08-17_2145_XRPUSD.png",
+    "chart": "charts/XRPUSD/2026-08-17_2147_XRPUSD.png",
     "manipulatie": "BEARISH",
     "manip_level": 1.0022,
     "reversal_confirmed": false,
@@ -369,15 +370,21 @@
     "correlatie_ok": false,
     "liq_highs": [
       1.0022,
-      1.0061,
+      1.006,
       1.0076
     ],
     "liq_lows": [
       0.988,
-      0.9955,
+      0.9954,
       0.9959
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-17 21:47",
+        "prijs": 1.0019,
+        "beslissing": "WACHT",
+        "score": -2
+      },
       {
         "tijdstip": "2026-08-17 21:45",
         "prijs": 1.0019,
@@ -491,15 +498,9 @@
         "prijs": 1.0024,
         "beslissing": "WACHT",
         "score": 0
-      },
-      {
-        "tijdstip": "2026-08-17 14:51",
-        "prijs": 1.0024,
-        "beslissing": "WACHT",
-        "score": 0
       }
     ]
   },
   "last_wa_sent": "2026-08-17T21:45:22.198594+00:00",
-  "tijdstip": "2026-08-17 21:45"
+  "tijdstip": "2026-08-17 21:47"
 }
