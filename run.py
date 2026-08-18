@@ -6,8 +6,6 @@ import requests as _req
 # === ASSETS ===
 ASSETS = [
     {'key': 'XAUUSD', 'yf_ticker': 'GC=F',    'decimals': 0, 'name': 'XAUUSD (Goud)'},
-    {'key': 'BTCUSD', 'yf_ticker': 'BTC-USD', 'decimals': 0, 'name': 'BTCUSD (Bitcoin)'},
-    {'key': 'XRPUSD', 'yf_ticker': 'XRP-USD', 'decimals': 4, 'name': 'XRPUSD (Ripple)'},
 ]
 # Correlatiefilter per asset — vervangt TJR's ES/NASDAQ alignment-check.
 # XAUUSD vs DXY is omgekeerd gecorreleerd; BTC/XRP zijn onderling gelijk gecorreleerd.

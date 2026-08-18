@@ -13,8 +13,6 @@ if hasattr(sys.stdout, 'reconfigure'):
 # ─── CONFIG (pas hier aan) ───────────────────────────────────────────────────
 ASSETS = [
     {'key': 'XAUUSD', 'mt5_symbol': 'XAUUSD-STD'},  # VT Markets (Pty) Ltd
-    {'key': 'BTCUSD', 'mt5_symbol': 'BTCUSD'},
-    {'key': 'XRPUSD', 'mt5_symbol': 'XRPUSD'},
 ]
 RISK_PERCENT    = 5.0         # max % van account-equity risico voor de twee lots samen (per signaal)
 LOT_PER_LEG     = 0.01        # vaste lotgrootte per been — elk signaal opent 2 posities van deze grootte
