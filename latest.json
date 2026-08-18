@@ -1,7 +1,7 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-08-18 17:50",
-    "prijs": 4359,
+    "tijdstip": "2026-08-18 18:19",
+    "prijs": 4360,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -11,7 +11,7 @@
     "weekly_trend": "NEUTRAAL",
     "daily_trend": "NEUTRAAL",
     "h4_trend": "BULLISH",
-    "h1_trend": "BULLISH",
+    "h1_trend": "NEUTRAAL",
     "m30_trend": "NEUTRAAL",
     "bos_h4": null,
     "bos_h1": "BOS_BEARISH",
@@ -24,7 +24,7 @@
       "61.8": 4313.0,
       "78.6": 4159.0
     },
-    "chart": "charts/XAUUSD/2026-08-18_1750_XAUUSD.png",
+    "chart": "charts/XAUUSD/2026-08-18_1819_XAUUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -44,6 +44,12 @@
       4442.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-18 18:19",
+        "prijs": 4360,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-18 17:50",
         "prijs": 4359,
@@ -157,18 +163,12 @@
         "prijs": 4393,
         "beslissing": "WACHT",
         "score": -4
-      },
-      {
-        "tijdstip": "2026-08-18 08:40",
-        "prijs": 4399,
-        "beslissing": "WACHT",
-        "score": -4
       }
     ]
   },
   "BTCUSD": {
-    "tijdstip": "2026-08-18 17:50",
-    "prijs": 64657,
+    "tijdstip": "2026-08-18 18:19",
+    "prijs": 64731,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -191,26 +191,32 @@
       "61.8": 65523.0,
       "78.6": 62103.0
     },
-    "chart": "charts/BTCUSD/2026-08-18_1750_BTCUSD.png",
+    "chart": "charts/BTCUSD/2026-08-18_1819_BTCUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
     "entry_confirmed": false,
     "correlatie_label": "XRP",
-    "correlatie_trend": "NEUTRAAL",
+    "correlatie_trend": "BEARISH",
     "correlatie_ok": false,
     "liq_highs": [
       64342.0,
-      64507.0,
-      65007.0
+      64504.0,
+      65008.0
     ],
     "liq_lows": [
-      62641.0,
+      62643.0,
       63979.0,
-      63991.0,
+      63994.0,
       64027.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-18 18:19",
+        "prijs": 64731,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-18 17:50",
         "prijs": 64657,
@@ -324,20 +330,14 @@
         "prijs": 64167,
         "beslissing": "WACHT",
         "score": -6
-      },
-      {
-        "tijdstip": "2026-08-18 08:40",
-        "prijs": 64265,
-        "beslissing": "WACHT",
-        "score": -2
       }
     ]
   },
   "XRPUSD": {
-    "tijdstip": "2026-08-18 17:50",
-    "prijs": 1.0,
+    "tijdstip": "2026-08-18 18:19",
+    "prijs": 1.0016,
     "beslissing": "WACHT",
-    "score": -4,
+    "score": 0,
     "entry": null,
     "sl": null,
     "tp1": null,
@@ -358,10 +358,10 @@
       "61.8": 1.1394,
       "78.6": 1.073
     },
-    "chart": "charts/XRPUSD/2026-08-18_1750_XRPUSD.png",
-    "manipulatie": "BEARISH",
-    "manip_level": 1.0005,
-    "reversal_confirmed": true,
+    "chart": "charts/XRPUSD/2026-08-18_1819_XRPUSD.png",
+    "manipulatie": null,
+    "manip_level": null,
+    "reversal_confirmed": false,
     "entry_confirmed": false,
     "correlatie_label": "BTC",
     "correlatie_trend": "NEUTRAAL",
@@ -374,11 +374,17 @@
     ],
     "liq_lows": [
       0.988,
-      0.9883,
+      0.9884,
       0.9915,
       0.995
     ],
     "history": [
+      {
+        "tijdstip": "2026-08-18 18:19",
+        "prijs": 1.0016,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-08-18 17:50",
         "prijs": 1.0,
@@ -492,15 +498,9 @@
         "prijs": 0.9957,
         "beslissing": "SHORT",
         "score": -8
-      },
-      {
-        "tijdstip": "2026-08-18 08:40",
-        "prijs": 0.9972,
-        "beslissing": "WACHT",
-        "score": -4
       }
     ]
   },
-  "last_wa_sent": "2026-08-18T17:47:11.764104+00:00",
-  "tijdstip": "2026-08-18 17:50"
+  "last_wa_sent": "2026-08-18T18:19:22.491113+00:00",
+  "tijdstip": "2026-08-18 18:19"
 }
