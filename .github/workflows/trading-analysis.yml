@@ -57,7 +57,7 @@ jobs:
     needs: analyse
     runs-on: ubuntu-latest
     steps:
-      - name: Wacht 28 min en trigger volgende analyse (alleen in sessie)
+      - name: Wacht (adaptief) en trigger volgende analyse (alleen in sessie)
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
@@ -67,8 +67,23 @@ jobs:
             echo "Buiten sessie (UTC ${HOUR}u) — relay stopt"
             exit 0
           fi
-          echo "In sessie (UTC ${HOUR}u) — wacht 28 minuten..."
-          sleep 1680
+
+          # Score/beslissing van de zojuist gepushte analyse ophalen: bij een
+          # bijna-compleet setup (|score|>=4) sneller pollen zodat de 1m
+          # entry-trigger niet gemist wordt; anders normale cadans.
+          read -r SCORE BESLISSING <<< "$(curl -s -H "Authorization: token $GH_PAT" \
+            "https://raw.githubusercontent.com/MattsVR420/trading-gold/main/latest.json" | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('score',0), d.get('beslissing','WACHT'))" 2>/dev/null || echo "0 WACHT")"
+          SCORE_ABS=${SCORE#-}
+          if [ "${SCORE_ABS:-0}" -ge 4 ] 2>/dev/null && [ "$BESLISSING" = "WACHT" ]; then
+            WAIT=120
+            echo "Score=$SCORE, beslissing=$BESLISSING — setup dichtbij: snelle polling, wacht 2 minuten..."
+          else
+            WAIT=1680
+            echo "Score=$SCORE, beslissing=$BESLISSING — normale polling, wacht 28 minuten..."
+          fi
+          sleep "$WAIT"
+
           # Hercheck sessie NA sleep — voorkomt analyses na sessie-einde
           HOUR=$(date -u +%-H)
           if ! in_session "$HOUR"; then
@@ -82,8 +97,11 @@ jobs:
           NOW=$(date -u +%s)
           ANALYSE_TS=$(date -u -d "$LAST UTC" +%s 2>/dev/null || echo 0)
           MINUTEN=$(( (NOW - ANALYSE_TS) / 60 ))
-          echo "Laatste analyse: $LAST ($MINUTEN min geleden)"
-          if [ "$MINUTEN" -gt 25 ]; then
+          WAIT_MIN=$(( WAIT / 60 ))
+          GUARD=$(( WAIT_MIN - 3 ))
+          if [ "$GUARD" -lt 1 ]; then GUARD=1; fi
+          echo "Laatste analyse: $LAST ($MINUTEN min geleden, guard=${GUARD}min)"
+          if [ "$MINUTEN" -gt "$GUARD" ]; then
             curl -s -X POST \
               -H "Authorization: token $GH_PAT" \
               -H "Accept: application/vnd.github.v3+json" \
