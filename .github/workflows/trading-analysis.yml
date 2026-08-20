@@ -8,7 +8,7 @@ on:
     - cron: '0,30 0-20 1-5 * *'   # ma-vr 00:00-20:59 UTC
     - cron: '0,30 21 5 * *'       # vr 21:00-21:59 UTC (blijft open tot weekslot om 22:00)
     - cron: '0,30 22-23 1-4 * *'  # ma-do 22:00-23:59 UTC (na dagelijkse rollover-pauze)
-    - cron: '0,30 22-23 0 * *'    # zo 22:00-23:59 UTC (marktopening)
+    - cron: '0,30 22-23 7 * *'    # zo 22:00-23:59 UTC (marktopening)
   workflow_dispatch:
 
 permissions:
