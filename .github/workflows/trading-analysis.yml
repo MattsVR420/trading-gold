@@ -2,13 +2,13 @@ name: XAUUSD Trading Analyse
 
 on:
   schedule:
-    # SESSIE 1: 06:00 CEST (04:00 UTC) → 12:00 CEST (10:00 UTC), elk 30 min
-    - cron: '0,30 4,5,6,7,8,9 * * *'
-    - cron: '0 10 * * *'
-    # SESSIE 2: 15:00 CEST (13:00 UTC) → 23:00 CEST (21:00 UTC), elk 30 min
-    # + MARKTOPENING: 23:00-00:00 CEST (21:00-22:00 UTC) — 1u analyses bij goudmarkt open
-    - cron: '0,30 13,14,15,16,17,18,19,20,21 * * *'
-    - cron: '0 22 * * *'
+    # Goud handelt ~23u/dag, ma-vr: zondag 22:00 UTC t/m vrijdag 22:00 UTC,
+    # met een dagelijkse rollover-pauze rond 21:00-22:00 UTC (ma-do).
+    # Geen aparte "sessies" meer — doorlopend elke 30 min zolang de markt open is.
+    - cron: '0,30 0-20 1-5 * *'   # ma-vr 00:00-20:59 UTC
+    - cron: '0,30 21 5 * *'       # vr 21:00-21:59 UTC (blijft open tot weekslot om 22:00)
+    - cron: '0,30 22-23 1-4 * *'  # ma-do 22:00-23:59 UTC (na dagelijkse rollover-pauze)
+    - cron: '0,30 22-23 0 * *'    # zo 22:00-23:59 UTC (marktopening)
   workflow_dispatch:
 
 permissions:
@@ -61,10 +61,21 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          HOUR=$(date -u +%-H)
-          in_session() { ( [ "$1" -ge 4 ] && [ "$1" -lt 10 ] ) || ( [ "$1" -ge 13 ] && [ "$1" -lt 22 ] ); }
-          if ! in_session "$HOUR"; then
-            echo "Buiten sessie (UTC ${HOUR}u) — relay stopt"
+          # Marktstatus i.p.v. vaste sessies: goud is dicht op zaterdag,
+          # zondag vóór 22:00 UTC, vrijdag vanaf 22:00 UTC, en ma-do rond
+          # de dagelijkse rollover-pauze (21:00-21:59 UTC).
+          in_session() {
+            local dow hour
+            dow=$(date -u +%u)   # 1=ma ... 6=za, 7=zo
+            hour=$(date -u +%-H)
+            if [ "$dow" -eq 6 ]; then return 1; fi
+            if [ "$dow" -eq 7 ]; then [ "$hour" -ge 22 ]; return $?; fi
+            if [ "$dow" -eq 5 ]; then [ "$hour" -lt 22 ]; return $?; fi
+            if [ "$hour" -eq 21 ]; then return 1; fi
+            return 0
+          }
+          if ! in_session; then
+            echo "Markt dicht (UTC $(date -u +%a\ %H)u) — relay stopt"
             exit 0
           fi
 
@@ -84,10 +95,9 @@ jobs:
           fi
           sleep "$WAIT"
 
-          # Hercheck sessie NA sleep — voorkomt analyses na sessie-einde
-          HOUR=$(date -u +%-H)
-          if ! in_session "$HOUR"; then
-            echo "Sessie voorbij na sleep (UTC ${HOUR}u) — geen nieuwe analyse"
+          # Hercheck marktstatus NA sleep — voorkomt analyses als de markt intussen sloot
+          if ! in_session; then
+            echo "Markt dicht na sleep (UTC $(date -u +%a\ %H)u) — geen nieuwe analyse"
             exit 0
           fi
           # Controleer latest.json tijdstip (alleen analyses updaten dit, geen code-pushes)
