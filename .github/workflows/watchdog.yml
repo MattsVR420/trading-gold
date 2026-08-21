@@ -42,14 +42,22 @@ jobs:
           fi
           echo "Minuten geleden: $MINUTEN"
 
-          # Sessie-uren (UTC): sessie1=04-09u (06-11 CEST), sessie2=13-21u (15-23 CEST)
-          # + marktopening: 21-22u UTC (23-00u CEST)
+          # Marktstatus i.p.v. vaste sessies (zelfde logica als trading-analysis.yml):
+          # dicht op zaterdag, zondag vóór 22:00 UTC, vrijdag vanaf 22:00 UTC,
+          # en ma-do rond de dagelijkse rollover-pauze (21:00-21:59 UTC).
+          DOW=$(date -u +%u)   # 1=ma ... 6=za, 7=zo
           HOUR=$(date -u +%-H)
-          IN_SESSION=false
-          if ( [ "$HOUR" -ge 4 ] && [ "$HOUR" -lt 10 ] ) || ( [ "$HOUR" -ge 13 ] && [ "$HOUR" -lt 22 ] ); then
-            IN_SESSION=true
+          IN_SESSION=true
+          if [ "$DOW" -eq 6 ]; then
+            IN_SESSION=false
+          elif [ "$DOW" -eq 7 ] && [ "$HOUR" -lt 22 ]; then
+            IN_SESSION=false
+          elif [ "$DOW" -eq 5 ] && [ "$HOUR" -ge 22 ]; then
+            IN_SESSION=false
+          elif [ "$HOUR" -eq 21 ] && [ "$DOW" -ne 5 ]; then
+            IN_SESSION=false
           fi
-          echo "In sessie: $IN_SESSION (UTC uur: $HOUR)"
+          echo "Markt open: $IN_SESSION (UTC dag=$DOW uur=$HOUR)"
 
           if [ "$IN_SESSION" = "true" ] && [ "$MINUTEN" -gt 35 ]; then
             echo "Analyse $MINUTEN min geleden — nu triggeren!"
