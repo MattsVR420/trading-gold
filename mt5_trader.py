@@ -14,9 +14,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 ASSETS = [
     {'key': 'XAUUSD', 'mt5_symbol': 'XAUUSD-STD'},  # VT Markets (Pty) Ltd
 ]
-RISK_PERCENT    = 1.0         # max % van account-equity risico per trade (op basis van SL-afstand)
+RISK_PERCENT    = 5.0         # max % van account-equity risico per trade (op basis van SL-afstand)
 LOT             = 0.01        # vaste lotgrootte — elk signaal opent 1 positie van deze grootte
-TAKE_PROFIT_PERCENT = 3.0     # positie sluit bij dit % winst t.o.v. balance
+TAKE_PROFIT_PERCENT = 10.0    # positie sluit bij dit % winst t.o.v. balance
 DEVIATION       = 30          # Max slippage in punten
 POLL_INTERVAL   = 60          # Seconden tussen checks van het signaal
 GITHUB_URL      = "https://raw.githubusercontent.com/MattsVR420/trading-gold/main/latest.json"
