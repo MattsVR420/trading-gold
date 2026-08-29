@@ -12,7 +12,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 # ─── CONFIG (pas hier aan) ───────────────────────────────────────────────────
 ASSETS = [
-    {'key': 'XAUUSD', 'mt5_symbol': 'XAUUSD-STD'},  # VT Markets (Pty) Ltd
+    # mt5_symbol mag een string zijn of een lijst kandidaten — de eerste die op de
+    # ingelogde server bestaat en verhandelbaar is, wordt gebruikt (live vs demo verschilt).
+    {'key': 'XAUUSD', 'mt5_symbol': ['XAUUSD-STD', 'XAUUSD-VIP', 'XAUUSD', 'XAUUSD-ECN', 'XAUUSD.r', 'GOLD']},
 ]
 RISK_PERCENT     = 1.0        # doelrisico per trade als % van account-equity — SL-afstand bepaalt de lotgrootte
 MIN_LOT_FALLBACK = True       # doelrisico kleiner dan min-lot toelaat? True = trade tóch nemen op min-lot (met waarschuwing), False = overslaan
@@ -251,10 +253,25 @@ def process_signal(symbol, signal):
             log.info(f"[{symbol}] WACHT signaal — geen open positie")
 
 
+def resolve_symbol(candidates):
+    """Eerste kandidaat die op de ingelogde server bestaat én verhandelbaar is."""
+    if isinstance(candidates, str):
+        candidates = [candidates]
+    for name in candidates:
+        sym = mt5.symbol_info(name)
+        if sym is None:
+            continue
+        if sym.trade_mode == mt5.SYMBOL_TRADE_MODE_DISABLED:
+            log.warning(f"Symbool '{name}' bestaat maar staat op DISABLED — volgende kandidaat")
+            continue
+        return name
+    return None
+
+
 def main():
     log.info("═" * 60)
     log.info("MVR MT5 Trader gestart")
-    log.info(f"Assets: {', '.join(a['mt5_symbol'] for a in ASSETS)} | Risico/trade: {RISK_PERCENT}% van equity (auto-lot) | TP: {TAKE_PROFIT_PERCENT}% | Poll: {POLL_INTERVAL}s")
+    log.info(f"Risico/trade: {RISK_PERCENT}% van equity (auto-lot) | TP: {TAKE_PROFIT_PERCENT}% | Poll: {POLL_INTERVAL}s")
     log.info("═" * 60)
 
     if not mt5.initialize():
@@ -264,22 +281,28 @@ def main():
 
     info = mt5.account_info()
     if info:
-        log.info(f"Account: {info.login} | {info.company} | Balance: ${info.balance:.2f}")
+        soort = {0: "REAL", 1: "DEMO", 2: "CONTEST"}.get(getattr(info, "trade_mode", None), "?")
+        log.info(f"Account: {info.login} | {info.server} | {info.company} | {soort} | Balance: {info.balance:.2f} {info.currency}")
     else:
         log.warning("Kan account info niet ophalen — controleer MT5 login")
 
     for a in ASSETS:
-        sym = mt5.symbol_info(a['mt5_symbol'])
-        if sym is None:
-            log.error(f"Symbool '{a['mt5_symbol']}' niet gevonden in MT5 — {a['key']} wordt overgeslagen deze sessie.")
+        resolved = resolve_symbol(a['mt5_symbol'])
+        if resolved is None:
+            log.error(f"Geen bruikbaar symbool voor {a['key']} (geprobeerd: {a['mt5_symbol']}) — overgeslagen deze sessie.")
+            a['mt5_symbol'] = None
             continue
+        a['mt5_symbol'] = resolved
+        sym = mt5.symbol_info(resolved)
         if not sym.visible:
-            mt5.symbol_select(a['mt5_symbol'], True)
-        log.info(f"Symbool OK: {a['mt5_symbol']} | Spread: {sym.spread} pts")
+            mt5.symbol_select(resolved, True)
+        log.info(f"Symbool OK: {a['key']} → {resolved} | Spread: {sym.spread} pts")
 
     while True:
         try:
             for a in ASSETS:
+                if not a['mt5_symbol']:
+                    continue
                 check_profit_cap(a['mt5_symbol'])
 
             all_signals = fetch_all_signals()
@@ -290,6 +313,8 @@ def main():
             state = load_state()
             for a in ASSETS:
                 key, symbol = a['key'], a['mt5_symbol']
+                if not symbol:
+                    continue
                 signal = all_signals.get(key)
                 if not signal:
                     continue
