@@ -4,7 +4,7 @@ Draai dit script terwijl MT5 open staat op je PC.
 """
 
 import MetaTrader5 as mt5
-import urllib.request, json, time, logging, sys
+import urllib.request, json, time, logging, sys, math
 from datetime import datetime
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -14,8 +14,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 ASSETS = [
     {'key': 'XAUUSD', 'mt5_symbol': 'XAUUSD-STD'},  # VT Markets (Pty) Ltd
 ]
-RISK_PERCENT    = 5.0         # max % van account-equity risico per trade (op basis van SL-afstand)
-LOT             = 0.01        # vaste lotgrootte — elk signaal opent 1 positie van deze grootte
+RISK_PERCENT     = 1.0        # doelrisico per trade als % van account-equity — SL-afstand bepaalt de lotgrootte
+MIN_LOT_FALLBACK = True       # doelrisico kleiner dan min-lot toelaat? True = trade tóch nemen op min-lot (met waarschuwing), False = overslaan
+MAX_LOT          = 1.0        # harde bovengrens op de automatisch berekende lotgrootte
 TAKE_PROFIT_PERCENT = 10.0    # positie sluit bij dit % winst t.o.v. balance
 DEVIATION       = 30          # Max slippage in punten
 POLL_INTERVAL   = 60          # Seconden tussen checks van het signaal
@@ -107,6 +108,57 @@ def close_position(symbol, position):
     return False
 
 
+def bereken_lot(symbol, order_type, price, sl, info, sym):
+    """Lotgrootte zo bepalen dat het verlies bij SL ≈ RISK_PERCENT% van de equity is.
+    Retourneert (lot, verwacht_risico_in_accountvaluta) of (None, reden) als de trade wordt overgeslagen."""
+    sl_distance = abs(price - float(sl))
+    if sl_distance <= 0:
+        return None, "ongeldige SL-afstand"
+
+    risico_bedrag = info.equity * (RISK_PERCENT / 100.0)
+    if risico_bedrag <= 0:
+        return None, f"geen equity om risico op te baseren (~{info.equity:.2f})"
+
+    # Verlies per 1.0 lot als de SL wordt geraakt, in account-valuta (MT5 rekent valutaomrekening mee)
+    verlies_per_lot = mt5.order_calc_profit(order_type, symbol, 1.0, price, float(sl))
+    if not verlies_per_lot:
+        # Fallback: neem aan dat account-valuta == quote-valuta van het symbool
+        verlies_per_lot = -(sl_distance * sym.trade_contract_size)
+        log.warning(f"[{symbol}] order_calc_profit gaf niets terug — ruwe schatting van risico per lot")
+    verlies_per_lot = abs(verlies_per_lot)
+    if verlies_per_lot <= 0:
+        return None, "kan risico per lot niet bepalen"
+
+    step = sym.volume_step or 0.01
+    vmin = sym.volume_min or 0.01
+    vmax = min(sym.volume_max or MAX_LOT, MAX_LOT)
+
+    # Naar beneden afronden op de lot-stap zodat het doelrisico niet wordt overschreden
+    ruwe_lot = risico_bedrag / verlies_per_lot
+    lot = round(math.floor(ruwe_lot / step) * step, 2)
+
+    if lot < vmin:
+        if MIN_LOT_FALLBACK:
+            lot = vmin
+            log.warning(f"[{symbol}] Doelrisico {RISK_PERCENT}% (~{risico_bedrag:.2f}) valt onder min-lot {vmin} — "
+                        f"trade op {vmin} lot, werkelijk risico ~{verlies_per_lot * vmin:.2f}")
+        else:
+            return None, f"doelrisico ~{risico_bedrag:.2f} te klein voor min-lot {vmin} (zou ~{verlies_per_lot * vmin:.2f} riskeren)"
+
+    lot = min(lot, vmax)
+
+    # Vrije-marge-check
+    marge = mt5.order_calc_margin(order_type, symbol, lot, price)
+    if marge and info.margin_free and marge > info.margin_free:
+        passend = round(math.floor((info.margin_free / marge) * lot / step) * step, 2)
+        if passend < vmin:
+            return None, f"onvoldoende vrije marge (nodig ~{marge:.2f}, vrij ~{info.margin_free:.2f})"
+        log.warning(f"[{symbol}] Lot verlaagd van {lot} naar {passend} wegens vrije marge")
+        lot = passend
+
+    return lot, verlies_per_lot * lot
+
+
 def open_trade(symbol, decision, sl):
     tick = mt5.symbol_info_tick(symbol)
     if not tick:
@@ -117,25 +169,23 @@ def open_trade(symbol, decision, sl):
     if info is None or sym is None:
         log.error(f"[{symbol}] Kan risico niet berekenen — geen account/symbol info")
         return False
+    if sl is None:
+        log.error(f"[{symbol}] Geen SL in signaal — kan lotgrootte niet bepalen, trade overgeslagen")
+        return False
 
     is_long = decision == "LONG"
     order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
     price = tick.ask if is_long else tick.bid
-    sl_distance = abs(price - float(sl))
-    if sl_distance <= 0:
-        log.error(f"[{symbol}] Ongeldige SL-afstand — kan niet openen")
-        return False
 
-    totaal_risico = sl_distance * sym.trade_contract_size * LOT
-    max_risico = info.equity * (RISK_PERCENT / 100)
-    if totaal_risico > max_risico:
-        log.warning(f"[{symbol}] Trade OVERGESLAGEN: risico van {LOT} lot (~{totaal_risico:.2f}) overschrijdt {RISK_PERCENT}% van equity (~{max_risico:.2f}).")
+    lot, risico = bereken_lot(symbol, order_type, price, sl, info, sym)
+    if lot is None:
+        log.warning(f"[{symbol}] Trade OVERGESLAGEN: {risico}")
         return False
 
     request = {
         "action":       mt5.TRADE_ACTION_DEAL,
         "symbol":       symbol,
-        "volume":       LOT,
+        "volume":       lot,
         "type":         order_type,
         "price":        price,
         "sl":           float(sl),
@@ -147,7 +197,7 @@ def open_trade(symbol, decision, sl):
     }
     result = mt5.order_send(request)
     if result.retcode == mt5.TRADE_RETCODE_DONE:
-        log.info(f"[{symbol}] Trade GEOPEND: {decision} @ {price} | SL={sl} | lot={LOT}")
+        log.info(f"[{symbol}] Trade GEOPEND: {decision} @ {price} | SL={sl} | lot={lot} | risico≈{risico:.2f} ({RISK_PERCENT}% van equity)")
         return True
     log.error(f"[{symbol}] Openen mislukt: code={result.retcode} — {result.comment}")
     return False
@@ -204,7 +254,7 @@ def process_signal(symbol, signal):
 def main():
     log.info("═" * 60)
     log.info("MVR MT5 Trader gestart")
-    log.info(f"Assets: {', '.join(a['mt5_symbol'] for a in ASSETS)} | Risico: {RISK_PERCENT}% ({LOT} lot) | TP: {TAKE_PROFIT_PERCENT}% | Poll: {POLL_INTERVAL}s")
+    log.info(f"Assets: {', '.join(a['mt5_symbol'] for a in ASSETS)} | Risico/trade: {RISK_PERCENT}% van equity (auto-lot) | TP: {TAKE_PROFIT_PERCENT}% | Poll: {POLL_INTERVAL}s")
     log.info("═" * 60)
 
     if not mt5.initialize():
