@@ -1,49 +1,57 @@
 """
-MVR Strategy B — vereenvoudigde "Range / Change / Execution" (SMC) test-bot
---------------------------------------------------------------------------
-Optie B uit de bespreking: M15-structuurbias + M1-CHoCH in die richting +
-FVG rond de CHoCH  ->  MARKET entry met vaste 1:4 (SL + TP bij de broker).
-GEEN limit-orders, GEEN partials, GEEN break-even-trailing (dat is de volle versie).
+MVR Strategy — "Range / Change / Execution" (SMC) — VOLLEDIGE versie
+------------------------------------------------------------------
+M15 structuur-bias  ->  M1 change-of-character in die richting  ->  FVG rond de CHoCH
+  -> LIMIT-order op (net vóór) de FVG-midpoint
+  -> SL net buiten het liquidity-inflection-niveau
+  -> partial op 1:4, SL -> break-even bij nieuwe BOS, runner naar HTF-FVG / structuur-trail
 
-Volledig los van de goud-bot: eigen MAGIC, eigen log, eigen state.
-Data komt rechtstreeks uit MT5 (moet open + ingelogd staan).
+Volledig los van de goud-bot: eigen MAGIC, eigen log/state.
+Data rechtstreeks uit MT5 (moet open + ingelogd staan).
 
 Draai:  python strategy_b.py
 """
 
 import MetaTrader5 as mt5
 import numpy as np
-import json, time, logging, sys, os
+import json, time, logging, sys
 from datetime import datetime, timezone
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 SYMBOL_CANDIDATES = ['BTCUSD', 'BTCUSD-VIP', 'BTCUSD.', 'BTCUSD-STD']
 RISK_PERCENT      = 1.0      # doelrisico per trade als % van equity
-RR                = 4.0      # vaste reward:risk (1:4)
+RR                = 4.0      # 1:4 = partial-niveau
+PARTIAL_FRAC      = 0.5      # deel dat op 1:4 wordt afgebouwd
+RUNNER_RR         = 8.0      # TP-cap voor de rest als er geen HTF-FVG-doel is
 MAX_LOT           = 5.0
 MIN_LOT_FALLBACK  = True     # doelrisico < min-lot -> tóch traden op min-lot (met waarschuwing)
 
-POLL_INTERVAL     = 60       # s tussen checks
-DEVIATION         = 50       # max slippage in punten (crypto = volatiel)
-MAGIC             = 424000   # uniek voor Strategy B
+POLL_INTERVAL     = 20       # s tussen checks (management wil sneller dan 60s)
+DEVIATION         = 50       # max slippage in punten
+MAGIC             = 424000
 
-SWING_LB_M15      = 3        # fractal-lookback M15 (bias)
-SWING_LB_M1       = 2        # fractal-lookback M1  (CHoCH)
-CHOCH_MAX_AGE     = 3        # CHoCH-breakout moet in de laatste N gesloten M1-kaarsen liggen
-DECISIVE_ATR_MULT = 0.6      # body van de break-kaars >= dit * ATR(14)
-DECISIVE_CLOSE_FRAC = 0.6    # close in de bovenste/onderste 60% van de kaars-range
+SWING_LB_M15      = 3        # fractal-lookback M15 (bias + HTF-FVG)
+SWING_LB_M1       = 2        # fractal-lookback M1  (CHoCH + BOS + trail)
+CHOCH_MAX_AGE     = 3        # CHoCH-breakout in de laatste N gesloten M1-kaarsen
+DECISIVE_ATR_MULT = 0.6      # body break-kaars >= dit * ATR(14)
+DECISIVE_CLOSE_FRAC = 0.6    # close in de gunstige 60% van de kaars-range
 FVG_NEAR_CHOCH    = 2        # FVG-middenkaars binnen ± N kaarsen van de break-kaars
-MIN_FVG_ATR_MULT  = 0.25     # FVG-hoogte moet >= dit * ATR(14) zijn (anders ruis)
-MAX_ENTRY_DIST_ATR = 1.5     # geen market-entry als prijs al > dit * ATR van de FVG-midpoint weg is (anti-chase)
+MIN_FVG_ATR_MULT  = 0.25     # FVG-hoogte >= dit * ATR(14)
+ENTRY_OFFSET_FRAC = 0.15     # limit dit deel van de FVG-hoogte vóór de midpoint (richting prijs)
 SL_BUFFER_ATR     = 0.5      # SL = anker-swing ± dit * ATR(14)
-MIN_SL_PCT        = 0.0015   # risk-afstand moet tussen deze twee liggen (fractie van prijs)
-MAX_SL_PCT        = 0.02
+BE_BUFFER_ATR     = 0.10     # break-even net voorbij entry (spread-buffer)
+TRAIL_BUFFER_ATR  = 0.30     # structuur-trail: laatste tegengestelde M1-swing ± dit * ATR
+MIN_SL_PCT        = 0.0015   # risk-afstand fractie van prijs, ondergrens
+MAX_SL_PCT        = 0.02     # ... bovengrens
+PENDING_EXPIRY_MIN = 45      # onvervulde limit-order na X min annuleren
+INVALID_ATR       = 2.0      # limit annuleren als prijs > dit * ATR van entry wegloopt (gemist)
 
-NY_SESSION_ONLY   = False    # True = alleen entries 13:30-16:00 UTC (BTC draait 24/7 -> default uit)
-DRY_RUN           = False    # True = alles loggen maar GEEN order sturen
+NY_SESSION_ONLY   = False    # True = alleen nieuwe setups 13:30-16:00 UTC
+DRY_RUN           = False    # True = alles loggen maar geen orders sturen
 
 STATE_FILE        = "strategy_b_state.json"
-HEARTBEAT_EVERY   = 15 * 60  # s — periodieke "ik leef nog" regel
+ANALYSE_FILE      = "strategy_b_analyse.md"
+ANALYSE_EVERY     = 15 * 60  # s — analyse-blok wegschrijven
 # ─────────────────────────────────────────────────────────────────────────────
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -57,9 +65,8 @@ logging.basicConfig(
 log = logging.getLogger("stratB")
 
 
-# ─── helpers: structuur ──────────────────────────────────────────────────────
+# ─── structuur-helpers ───────────────────────────────────────────────────────
 def swings(high, low, lb):
-    """Fractal swing highs/lows. Return (list[(idx,price)], list[(idx,price)])."""
     sh, sl = [], []
     n = len(high)
     for i in range(lb, n - lb):
@@ -71,15 +78,14 @@ def swings(high, low, lb):
 
 
 def structure_bias(high, low, close, lb):
-    """Richting van de meest recente break of structure (close voorbij laatst bevestigde swing)."""
     sh, sl = swings(high, low, lb)
     last_dir = None
     for i in range(len(close)):
-        avail_h = [p for (idx, p) in sh if idx + lb <= i]
-        avail_l = [p for (idx, p) in sl if idx + lb <= i]
-        if avail_h and close[i] > avail_h[-1]:
+        ah = [p for (idx, p) in sh if idx + lb <= i]
+        al = [p for (idx, p) in sl if idx + lb <= i]
+        if ah and close[i] > ah[-1]:
             last_dir = 'BULLISH'
-        if avail_l and close[i] < avail_l[-1]:
+        if al and close[i] < al[-1]:
             last_dir = 'BEARISH'
     return last_dir
 
@@ -87,21 +93,14 @@ def structure_bias(high, low, close, lb):
 def atr(high, low, close, period=14):
     tr = np.maximum(high[1:] - low[1:],
                     np.maximum(np.abs(high[1:] - close[:-1]), np.abs(low[1:] - close[:-1])))
-    if len(tr) < period:
-        return float(np.mean(tr)) if len(tr) else 0.0
-    return float(np.mean(tr[-period:]))
+    if len(tr) == 0:
+        return 0.0
+    return float(np.mean(tr[-period:])) if len(tr) >= period else float(np.mean(tr))
 
 
 def find_choch(high, low, close, lb, bias, max_age):
-    """
-    Eerste 'change of character' in de bias-richting op de laatste gesloten kaarsen.
-    BULLISH bias: down-leg (swing high -> lagere swing low) waarvan de swing high nu
-    van onderaf gebroken wordt. Mirror voor BEARISH.
-    Return dict(break_i, level, anchor, anchor_i, dir) of None.
-    """
     sh, sl = swings(high, low, lb)
     n = len(close)
-
     if bias == 'BULLISH':
         for k in range(len(sh) - 1, -1, -1):
             idx_h, lvl = sh[k]
@@ -109,17 +108,15 @@ def find_choch(high, low, close, lb, bias, max_age):
             lows_after  = [(i, p) for (i, p) in sl if i > idx_h]
             if not lows_before or not lows_after:
                 continue
-            # anker = de MEEST RECENTE swing low na de swing high die ook een lagere low maakt
             qual = [(i, p) for (i, p) in lows_after if p < lows_before[-1][1]]
             if not qual:
-                continue  # geen lagere low -> geen echte down-leg
+                continue
             leg_low_i, leg_low = qual[-1]
             for i in range(max(leg_low_i + 1, n - max_age), n):
                 if close[i] > lvl:
                     return {'break_i': i, 'level': lvl, 'anchor': leg_low, 'anchor_i': leg_low_i, 'dir': 'LONG'}
             return None
         return None
-
     if bias == 'BEARISH':
         for k in range(len(sl) - 1, -1, -1):
             idx_l, lvl = sl[k]
@@ -139,27 +136,58 @@ def find_choch(high, low, close, lb, bias, max_age):
     return None
 
 
-def fvg_near(open_, high, low, close, center_i, bias, span, min_size):
-    """FVG (3-kaars imbalance) in de bias-richting, middenkaars binnen ± span van center_i,
-    en met een hoogte van minstens min_size (anders ruis)."""
+def fvg_near(high, low, center_i, bias, span, min_size):
     lo = max(2, center_i - span)
-    hi = min(len(close) - 1, center_i + span)
+    hi = min(len(high) - 1, center_i + span)
     for i in range(lo, hi + 1):
         if bias == 'BULLISH' and low[i] - high[i - 2] >= min_size:
-            return {'mid': (high[i - 2] + low[i]) / 2, 'top': float(low[i]), 'bot': float(high[i - 2]),
-                    'size': float(low[i] - high[i - 2])}
+            return {'mid': (high[i - 2] + low[i]) / 2, 'top': float(low[i]), 'bot': float(high[i - 2])}
         if bias == 'BEARISH' and low[i - 2] - high[i] >= min_size:
-            return {'mid': (low[i - 2] + high[i]) / 2, 'top': float(low[i - 2]), 'bot': float(high[i]),
-                    'size': float(low[i - 2] - high[i])}
+            return {'mid': (low[i - 2] + high[i]) / 2, 'top': float(low[i - 2]), 'bot': float(high[i])}
     return None
 
 
-# ─── helpers: MT5 ────────────────────────────────────────────────────────────
+def htf_fvg_target(m15, direction, ref_price):
+    h, l = m15['high'], m15['low']
+    best = None
+    for i in range(2, len(h)):
+        if direction == 'LONG' and l[i] > h[i - 2]:
+            mid = (h[i - 2] + l[i]) / 2
+            if mid > ref_price and (best is None or mid < best):
+                best = mid
+        if direction == 'SHORT' and h[i] < l[i - 2]:
+            mid = (l[i - 2] + h[i]) / 2
+            if mid < ref_price and (best is None or mid > best):
+                best = mid
+    return best
+
+
+def new_bos_since(times, high, low, close, entry_ts, direction, lb):
+    ei = int(np.searchsorted(times, entry_ts))
+    sh, sl = swings(high, low, lb)
+    if direction == 'LONG':
+        post = [p for (i, p) in sh if i > ei and i + lb <= len(close) - 1]
+        return bool(post) and close[-1] > post[-1]
+    post = [p for (i, p) in sl if i > ei and i + lb <= len(close) - 1]
+    return bool(post) and close[-1] < post[-1]
+
+
+def struct_trail_sl(m1, entry_ts, direction, lb, buf):
+    ei = int(np.searchsorted(m1['time'], entry_ts))
+    sh, sl = swings(m1['high'], m1['low'], lb)
+    if direction == 'LONG':
+        post = [p for (i, p) in sl if i > ei]
+        return (post[-1] - buf) if post else None
+    post = [p for (i, p) in sh if i > ei]
+    return (post[-1] + buf) if post else None
+
+
+# ─── MT5-helpers ─────────────────────────────────────────────────────────────
 def rates(symbol, timeframe, count):
     r = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
     if r is None or len(r) < 30:
         return None
-    return r[:-1]  # laat de nog-vormende kaars weg
+    return r[:-1]
 
 
 def filling_mode(symbol):
@@ -184,38 +212,40 @@ def resolve_symbol():
     return None
 
 
-def open_pos(symbol):
-    pos = mt5.positions_get(symbol=symbol)
-    return [p for p in (pos or []) if p.magic == MAGIC]
+def our_positions(symbol):
+    return [p for p in (mt5.positions_get(symbol=symbol) or []) if p.magic == MAGIC]
+
+
+def our_orders(symbol):
+    return [o for o in (mt5.orders_get(symbol=symbol) or []) if o.magic == MAGIC]
 
 
 def calc_lot(symbol, order_type, price, sl, info, sym):
     risico = info.equity * (RISK_PERCENT / 100.0)
     if risico <= 0:
         return None, f"geen equity (~{info.equity:.2f})"
-    loss_per_lot = mt5.order_calc_profit(order_type, symbol, 1.0, price, float(sl))
-    if not loss_per_lot:
-        loss_per_lot = -(abs(price - sl) * sym.trade_contract_size)
-    loss_per_lot = abs(loss_per_lot)
-    if loss_per_lot <= 0:
+    lpl = mt5.order_calc_profit(order_type, symbol, 1.0, price, float(sl))
+    if not lpl:
+        lpl = -(abs(price - sl) * sym.trade_contract_size)
+    lpl = abs(lpl)
+    if lpl <= 0:
         return None, "risico per lot onbepaald"
     step = sym.volume_step or 0.01
     vmin = sym.volume_min or 0.01
     vmax = min(sym.volume_max or MAX_LOT, MAX_LOT)
-    lot = np.floor((risico / loss_per_lot) / step) * step
-    lot = round(float(lot), 2)
+    lot = round(float(np.floor((risico / lpl) / step) * step), 2)
     if lot < vmin:
         if MIN_LOT_FALLBACK:
-            log.warning(f"doelrisico {RISK_PERCENT}% (~{risico:.2f}) < min-lot {vmin} — "
-                        f"trade op {vmin} lot, werkelijk risico ~{loss_per_lot * vmin:.2f}")
+            log.warning(f"doelrisico {RISK_PERCENT}% (~{risico:.2f}) < min-lot {vmin} — trade op {vmin}, "
+                        f"werkelijk risico ~{lpl * vmin:.2f}")
             lot = vmin
         else:
             return None, f"doelrisico te klein voor min-lot {vmin}"
     lot = min(lot, vmax)
     marge = mt5.order_calc_margin(order_type, symbol, lot, price)
     if marge and info.margin_free and marge > info.margin_free:
-        return None, f"onvoldoende vrije marge (nodig ~{marge:.2f}, vrij ~{info.margin_free:.2f})"
-    return lot, loss_per_lot * lot
+        return None, f"onvoldoende vrije marge (nodig ~{marge:.2f})"
+    return lot, lpl * lot
 
 
 def load_state():
@@ -235,29 +265,36 @@ def in_ny_session():
     if not NY_SESSION_ONLY:
         return True
     now = datetime.now(timezone.utc)
-    mins = now.hour * 60 + now.minute
-    return 13 * 60 + 30 <= mins <= 16 * 60
+    m = now.hour * 60 + now.minute
+    return 13 * 60 + 30 <= m <= 16 * 60
 
 
-# ─── kern ────────────────────────────────────────────────────────────────────
-def evaluate_and_trade(symbol):
-    m15 = rates(symbol, mt5.TIMEFRAME_M15, 220)
+def send(req, what):
+    if DRY_RUN:
+        log.info(f"DRY_RUN — {what} niet verstuurd: {req}")
+        return None
+    res = mt5.order_send(req)
+    if res is None:
+        log.error(f"{what}: order_send None — {mt5.last_error()}")
+    elif res.retcode != mt5.TRADE_RETCODE_DONE:
+        log.error(f"{what}: code={res.retcode} — {res.comment}")
+    return res
+
+
+# ─── fasen ───────────────────────────────────────────────────────────────────
+def try_new_setup(symbol, st):
+    m15 = rates(symbol, mt5.TIMEFRAME_M15, 240)
     m1  = rates(symbol, mt5.TIMEFRAME_M1, 320)
     if m15 is None or m1 is None:
-        log.warning("onvoldoende koersdata — overslaan")
         return
 
     bias = structure_bias(m15['high'], m15['low'], m15['close'], SWING_LB_M15)
-    state = load_state()
-    if state.get("last_bias") != bias:
+    if st.get("last_bias") != bias:
         log.info(f"M15-bias: {bias}")
-        state["last_bias"] = bias
-        save_state(state)
+        st["last_bias"] = bias
+        save_state(st)
     if bias is None:
         return
-
-    if open_pos(symbol):
-        return  # 1 positie tegelijk; broker-SL/TP beheert hem
 
     ch = find_choch(m1['high'], m1['low'], m1['close'], SWING_LB_M1, bias, CHOCH_MAX_AGE)
     if not ch:
@@ -265,118 +302,258 @@ def evaluate_and_trade(symbol):
 
     bi = ch['break_i']
     o, h, l, c = m1['open'], m1['high'], m1['low'], m1['close']
-    _atr = atr(h, l, c, 14)
+    a1 = atr(h, l, c, 14)
     body = abs(c[bi] - o[bi]); rng = h[bi] - l[bi]
     if rng <= 0:
         return
     frac = (c[bi] - l[bi]) / rng if ch['dir'] == 'LONG' else (h[bi] - c[bi]) / rng
-    if body < DECISIVE_ATR_MULT * _atr or frac < DECISIVE_CLOSE_FRAC:
-        log.info(f"CHoCH {ch['dir']} @ M1 idx{bi} maar kaars niet decisief (body={body:.2f} vs {DECISIVE_ATR_MULT*_atr:.2f}, close-frac={frac:.2f}) — geen entry")
+    if body < DECISIVE_ATR_MULT * a1 or frac < DECISIVE_CLOSE_FRAC:
+        log.info(f"CHoCH {ch['dir']} niet decisief (body {body:.2f}/{DECISIVE_ATR_MULT*a1:.2f}, frac {frac:.2f}) — skip")
         return
 
-    fvg = fvg_near(o, h, l, c, bi, bias, FVG_NEAR_CHOCH, MIN_FVG_ATR_MULT * _atr)
+    fvg = fvg_near(h, l, bi, bias, FVG_NEAR_CHOCH, MIN_FVG_ATR_MULT * a1)
     if not fvg:
-        log.info(f"CHoCH {ch['dir']} decisief maar geen FVG (>= {MIN_FVG_ATR_MULT*_atr:.2f}) binnen ±{FVG_NEAR_CHOCH} kaarsen — geen entry")
+        log.info(f"CHoCH {ch['dir']} decisief maar geen FVG (>= {MIN_FVG_ATR_MULT*a1:.2f}) — skip")
         return
 
     break_ts = int(m1['time'][bi])
     ch_key = [break_ts, ch['dir']]
-    if state.get("last_choch") == ch_key:
-        return  # deze setup al afgehandeld
-
+    if st.get("last_choch") == ch_key:
+        return
     if not in_ny_session():
-        log.info(f"CHoCH {ch['dir']} geldig maar buiten NY-sessie — geen entry")
-        state["last_choch"] = ch_key
-        save_state(state)
+        log.info(f"CHoCH {ch['dir']} geldig maar buiten NY-sessie — skip")
+        st["last_choch"] = ch_key; save_state(st)
         return
 
-    tick = mt5.symbol_info_tick(symbol)
-    info = mt5.account_info()
-    sym  = mt5.symbol_info(symbol)
-    if not tick or not info or not sym or tick.ask <= 0 or tick.bid <= 0:
-        log.warning("geen geldige tick/account info — overslaan")
+    info = mt5.account_info(); sym = mt5.symbol_info(symbol); tick = mt5.symbol_info_tick(symbol)
+    if not info or not sym or not tick or tick.ask <= 0:
         return
 
-    if abs(((tick.ask + tick.bid) / 2) - fvg['mid']) > MAX_ENTRY_DIST_ATR * _atr:
-        log.info(f"CHoCH {ch['dir']} geldig maar prijs al > {MAX_ENTRY_DIST_ATR}*ATR van FVG-mid ({fvg['mid']:.2f}) — geen chase-entry")
-        state["last_choch"] = ch_key
-        save_state(state)
-        return
-
+    fvg_h = fvg['top'] - fvg['bot']
     if ch['dir'] == 'LONG':
-        order_type = mt5.ORDER_TYPE_BUY
-        entry = tick.ask
-        sl_price = ch['anchor'] - SL_BUFFER_ATR * _atr
+        order_type = mt5.ORDER_TYPE_BUY_LIMIT
+        entry = fvg['mid'] + ENTRY_OFFSET_FRAC * fvg_h        # iets bóven de mid -> vult op pullback omlaag
+        sl_price = ch['anchor'] - SL_BUFFER_ATR * a1
         risk = entry - sl_price
-        tp_price = entry + RR * risk
+        if tick.bid <= entry:                                # prijs al in/onder de FVG -> te laat / market-achtig
+            log.info(f"LONG setup maar prijs ({tick.bid:.2f}) al <= limit ({entry:.2f}) — skip")
+            st["last_choch"] = ch_key; save_state(st); return
     else:
-        order_type = mt5.ORDER_TYPE_SELL
-        entry = tick.bid
-        sl_price = ch['anchor'] + SL_BUFFER_ATR * _atr
+        order_type = mt5.ORDER_TYPE_SELL_LIMIT
+        entry = fvg['mid'] - ENTRY_OFFSET_FRAC * fvg_h
+        sl_price = ch['anchor'] + SL_BUFFER_ATR * a1
         risk = sl_price - entry
-        tp_price = entry - RR * risk
+        if tick.ask >= entry:
+            log.info(f"SHORT setup maar prijs ({tick.ask:.2f}) al >= limit ({entry:.2f}) — skip")
+            st["last_choch"] = ch_key; save_state(st); return
 
     if risk <= 0:
-        log.info(f"CHoCH {ch['dir']}: ongeldige risk-afstand — geen entry")
         return
     pct = risk / entry
     if pct < MIN_SL_PCT or pct > MAX_SL_PCT:
-        log.info(f"CHoCH {ch['dir']}: SL-afstand {pct*100:.2f}% buiten [{MIN_SL_PCT*100:.2f}%, {MAX_SL_PCT*100:.2f}%] — geen entry")
-        state["last_choch"] = ch_key
-        save_state(state)
-        return
+        log.info(f"{ch['dir']} SL-afstand {pct*100:.2f}% buiten [{MIN_SL_PCT*100:.2f}, {MAX_SL_PCT*100:.2f}]% — skip")
+        st["last_choch"] = ch_key; save_state(st); return
 
-    lot, risico = calc_lot(symbol, order_type, entry, sl_price, info, sym)
+    lot, risico = calc_lot(symbol, mt5.ORDER_TYPE_BUY if ch['dir'] == 'LONG' else mt5.ORDER_TYPE_SELL,
+                           entry, sl_price, info, sym)
     if lot is None:
-        log.warning(f"CHoCH {ch['dir']}: geen lot — {risico}")
+        log.warning(f"{ch['dir']} geen lot — {risico}")
         return
 
-    digits = sym.digits
-    log.info(f"SETUP {ch['dir']} | bias={bias} | CHoCH-lvl={ch['level']:.{digits}f} | anker={ch['anchor']:.{digits}f} | "
-             f"FVG mid={fvg['mid']:.{digits}f} | entry={entry:.{digits}f} SL={sl_price:.{digits}f} TP={tp_price:.{digits}f} "
-             f"(1:{RR:.0f}, risk {pct*100:.2f}%) | lot={lot} risico≈{risico:.2f}")
-
-    if DRY_RUN:
-        log.info("DRY_RUN — geen order verstuurd")
-        state["last_choch"] = ch_key
-        save_state(state)
-        return
+    d = sym.digits
+    tp_runner = entry + RUNNER_RR * risk if ch['dir'] == 'LONG' else entry - RUNNER_RR * risk
+    htf = htf_fvg_target(m15, ch['dir'], entry)
+    tp0 = htf if htf else tp_runner
 
     req = {
-        "action": mt5.TRADE_ACTION_DEAL,
-        "symbol": symbol,
-        "volume": lot,
-        "type": order_type,
-        "price": entry,
-        "sl": round(float(sl_price), digits),
-        "tp": round(float(tp_price), digits),
-        "deviation": DEVIATION,
-        "magic": MAGIC,
-        "comment": "MVR-B CHoCH",
-        "type_time": mt5.ORDER_TIME_GTC,
+        "action": mt5.TRADE_ACTION_PENDING, "symbol": symbol, "volume": lot, "type": order_type,
+        "price": round(float(entry), d), "sl": round(float(sl_price), d), "tp": round(float(tp0), d),
+        "magic": MAGIC, "comment": "MVR CHoCH", "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": filling_mode(symbol),
     }
-    res = mt5.order_send(req)
-    state["last_choch"] = ch_key
-    save_state(state)
-    if res is None:
-        log.error(f"order_send gaf None — {mt5.last_error()}")
-    elif res.retcode == mt5.TRADE_RETCODE_DONE:
-        log.info(f"TRADE GEOPEND {ch['dir']} {symbol} @ {res.price} | lot={lot} | SL={req['sl']} TP={req['tp']} | ticket={res.order}")
+    log.info(f"SETUP {ch['dir']} | bias {bias} | FVG {fvg['bot']:.{d}f}-{fvg['top']:.{d}f} mid {fvg['mid']:.{d}f} | "
+             f"LIMIT {entry:.{d}f} | SL {sl_price:.{d}f} ({pct*100:.2f}%) | 1:4 @ {entry + (RR*risk if ch['dir']=='LONG' else -RR*risk):.{d}f} | "
+             f"TP0 {tp0:.{d}f} {'(HTF-FVG)' if htf else '(runner)'} | lot {lot} risico≈{risico:.2f}")
+    res = send(req, "pending")
+    st["last_choch"] = ch_key
+    if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE:
+        st.update({
+            "phase": "PENDING", "pending_ticket": res.order, "pending_since": int(time.time()),
+            "dir": ch['dir'], "entry_price": float(entry), "sl0": float(sl_price), "risk": float(risk),
+            "lot": float(lot), "tp_1to4": float(entry + (RR*risk if ch['dir'] == 'LONG' else -RR*risk)),
+            "tp_runner": float(tp_runner), "htf_target": float(htf) if htf else None,
+            "partial_done": False, "be_done": False,
+        })
+        log.info(f"PENDING geplaatst — ticket {res.order}")
+    save_state(st)
+
+
+def manage_pending(symbol, st):
+    orders = our_orders(symbol)
+    if not any(o.ticket == st.get("pending_ticket") for o in orders):
+        # order weg: gevuld of extern verwijderd
+        if our_positions(symbol):
+            pos = our_positions(symbol)[0]
+            st.update({"phase": "MANAGING", "position_ticket": pos.ticket, "entry_ts": int(pos.time),
+                       "entry_fill": float(pos.price_open)})
+            log.info(f"LIMIT GEVULD — positie {pos.ticket} @ {pos.price_open}")
+        else:
+            log.info("pending order verdwenen zonder positie — terug naar IDLE")
+            st["phase"] = "IDLE"
+        save_state(st)
+        return
+
+    tick = mt5.symbol_info_tick(symbol)
+    m1 = rates(symbol, mt5.TIMEFRAME_M1, 200)
+    a1 = atr(m1['high'], m1['low'], m1['close'], 14) if m1 is not None else 0
+    age_min = (time.time() - st.get("pending_since", time.time())) / 60
+    reden = None
+    if age_min > PENDING_EXPIRY_MIN:
+        reden = f"verlopen ({age_min:.0f} min)"
+    elif st["dir"] == "LONG" and tick and tick.bid > st["entry_price"] + INVALID_ATR * a1:
+        reden = "prijs weggelopen omhoog (gemist)"
+    elif st["dir"] == "SHORT" and tick and tick.ask < st["entry_price"] - INVALID_ATR * a1:
+        reden = "prijs weggelopen omlaag (gemist)"
     else:
-        log.error(f"openen mislukt: code={res.retcode} — {res.comment}")
+        m15 = rates(symbol, mt5.TIMEFRAME_M15, 240)
+        if m15 is not None:
+            bias = structure_bias(m15['high'], m15['low'], m15['close'], SWING_LB_M15)
+            if (st["dir"] == "LONG" and bias == "BEARISH") or (st["dir"] == "SHORT" and bias == "BULLISH"):
+                reden = f"M15-bias gedraaid naar {bias}"
+    if reden:
+        log.info(f"PENDING annuleren — {reden}")
+        send({"action": mt5.TRADE_ACTION_REMOVE, "order": st["pending_ticket"]}, "cancel")
+        st["phase"] = "IDLE"
+        save_state(st)
+
+
+def manage_position(symbol, st):
+    pos_list = our_positions(symbol)
+    if not pos_list:
+        # dicht: SL/TP/hand — resultaat ophalen
+        realized = 0.0
+        deals = mt5.history_deals_get(position=st.get("position_ticket", 0)) or []
+        for dl in deals:
+            realized += dl.profit + dl.swap + dl.commission
+        won = realized > 0
+        st["wins"] = st.get("wins", 0) + (1 if won else 0)
+        st["losses"] = st.get("losses", 0) + (0 if won else 1)
+        st["realized_total"] = st.get("realized_total", 0.0) + realized
+        log.info(f"TRADE DICHT — resultaat {realized:+.2f} | totaal {st['realized_total']:+.2f} | "
+                 f"W/L {st['wins']}/{st['losses']}")
+        for k in ("phase", "pending_ticket", "position_ticket", "dir", "entry_price", "sl0", "risk",
+                  "lot", "tp_1to4", "tp_runner", "htf_target", "partial_done", "be_done", "entry_ts", "entry_fill"):
+            st.pop(k, None)
+        st["phase"] = "IDLE"
+        save_state(st)
+        return
+
+    pos = pos_list[0]
+    sym = mt5.symbol_info(symbol); tick = mt5.symbol_info_tick(symbol)
+    m1 = rates(symbol, mt5.TIMEFRAME_M1, 240)
+    if not tick or m1 is None:
+        return
+    d = sym.digits
+    a1 = atr(m1['high'], m1['low'], m1['close'], 14)
+    entry = st.get("entry_fill", pos.price_open)
+    risk = st["risk"]
+    is_long = st["dir"] == "LONG"
+    price = tick.bid if is_long else tick.ask
+    r_now = (price - entry) / risk if is_long else (entry - price) / risk
+
+    # 1) partial op 1:4
+    if not st.get("partial_done") and r_now >= RR:
+        step = sym.volume_step or 0.01
+        pv = round(np.floor(pos.volume * PARTIAL_FRAC / step) * step, 2)
+        if pv >= (sym.volume_min or 0.01) and (pos.volume - pv) >= (sym.volume_min or 0.01):
+            send({"action": mt5.TRADE_ACTION_DEAL, "symbol": symbol, "position": pos.ticket, "volume": pv,
+                  "type": mt5.ORDER_TYPE_SELL if is_long else mt5.ORDER_TYPE_BUY,
+                  "price": tick.bid if is_long else tick.ask, "deviation": DEVIATION, "magic": MAGIC,
+                  "comment": "MVR 1:4 partial", "type_filling": filling_mode(symbol)}, "partial")
+            log.info(f"PARTIAL {pv} lot @ 1:{RR:.0f}")
+        st["partial_done"] = True
+        save_state(st)
+
+    # 2) break-even bij nieuwe BOS in trade-richting (of zodra 1:4 geraakt)
+    if not st.get("be_done"):
+        bos = new_bos_since(m1['time'], m1['high'], m1['low'], m1['close'], st["entry_ts"], st["dir"], SWING_LB_M1)
+        if bos or st.get("partial_done"):
+            be = entry + BE_BUFFER_ATR * a1 if is_long else entry - BE_BUFFER_ATR * a1
+            if (is_long and be > pos.sl) or (not is_long and be < pos.sl) or pos.sl == 0:
+                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
+                      "sl": round(float(be), d), "tp": pos.tp}, "SL->BE")
+                log.info(f"SL -> break-even ({be:.{d}f})  [{'nieuwe BOS' if bos else 'na 1:4'}]")
+            st["be_done"] = True
+            save_state(st)
+
+    # 3) na BE: structuur-trail + HTF-doel bijwerken
+    if st.get("be_done"):
+        new_sl = struct_trail_sl(m1, st["entry_ts"], st["dir"], SWING_LB_M1, TRAIL_BUFFER_ATR * a1)
+        if new_sl and ((is_long and new_sl > pos.sl) or (not is_long and new_sl < pos.sl)):
+            # nooit voorbij de huidige prijs trailen
+            if (is_long and new_sl < price) or (not is_long and new_sl > price):
+                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
+                      "sl": round(float(new_sl), d), "tp": pos.tp}, "trail")
+                log.info(f"trail SL -> {new_sl:.{d}f}")
+        m15 = rates(symbol, mt5.TIMEFRAME_M15, 240)
+        if m15 is not None:
+            htf = htf_fvg_target(m15, st["dir"], price)
+            if htf and abs(htf - pos.tp) > a1:
+                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
+                      "sl": pos.sl, "tp": round(float(htf), d)}, "TP->HTF")
+                log.info(f"TP -> HTF-FVG {htf:.{d}f}")
+
+
+def write_analyse(symbol, st):
+    try:
+        info = mt5.account_info()
+        m15 = rates(symbol, mt5.TIMEFRAME_M15, 240)
+        m1 = rates(symbol, mt5.TIMEFRAME_M1, 240)
+        tick = mt5.symbol_info_tick(symbol)
+        bias = structure_bias(m15['high'], m15['low'], m15['close'], SWING_LB_M15) if m15 is not None else "?"
+        a1 = atr(m1['high'], m1['low'], m1['close'], 14) if m1 is not None else 0
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        pos = our_positions(symbol)
+        pend = our_orders(symbol)
+        lines = [
+            f"## {now}",
+            f"- Prijs {symbol}: bid {tick.bid} / ask {tick.ask} | M1 ATR14 ~{a1:.1f}",
+            f"- **M15-bias: {bias}**",
+            f"- Fase: **{st.get('phase', 'IDLE')}** | equity {info.equity:.2f} {info.currency} | "
+            f"W/L {st.get('wins', 0)}/{st.get('losses', 0)} | realized totaal {st.get('realized_total', 0.0):+.2f}",
+        ]
+        for o in pend:
+            lines.append(f"- Pending #{o.ticket}: {st.get('dir','?')} limit {o.price_open} SL {o.sl} TP {o.tp} "
+                         f"(leeftijd {(time.time()-st.get('pending_since',time.time()))/60:.0f} min)")
+        for p in pos:
+            is_long = p.type == mt5.POSITION_TYPE_BUY
+            rr = ((tick.bid if is_long else tick.ask) - st.get('entry_fill', p.price_open)) / max(st.get('risk', 1), 1e-9)
+            rr = rr if is_long else -rr
+            lines.append(f"- Positie #{p.ticket}: {'LONG' if is_long else 'SHORT'} {p.volume} lot @ {p.price_open} | "
+                         f"SL {p.sl} TP {p.tp} | P/L {p.profit:+.2f} | ~{rr:+.1f}R | "
+                         f"partial={st.get('partial_done')} be={st.get('be_done')}")
+        if not pos and not pend:
+            ch = None
+            if m1 is not None and bias in ("BULLISH", "BEARISH"):
+                ch = find_choch(m1['high'], m1['low'], m1['close'], SWING_LB_M1, bias, 8)
+            lines.append(f"- Geen positie/pending. Laatste CHoCH-kandidaat (age<=8): {ch}")
+        block = "\n".join(lines) + "\n\n"
+        with open(ANALYSE_FILE, "a", encoding="utf-8") as f:
+            f.write(block)
+        log.info("ANALYSE:\n" + block.strip())
+    except Exception as e:
+        log.warning(f"analyse schrijven mislukt: {e}")
 
 
 def main():
     log.info("═" * 60)
-    log.info("MVR Strategy B (SMC vereenvoudigd, 1:4 market) gestart")
-    log.info(f"RR=1:{RR:.0f} | risico/trade={RISK_PERCENT}% | poll={POLL_INTERVAL}s | "
-             f"NY-only={NY_SESSION_ONLY} | DRY_RUN={DRY_RUN}")
+    log.info("MVR Strategy — VOLLEDIG (SMC: limit @ FVG-mid, partial 1:4, BE op BOS, HTF-trail)")
+    log.info(f"RR 1:{RR:.0f} (partial {PARTIAL_FRAC:.0%}) | runner {RUNNER_RR:.0f}R | risico {RISK_PERCENT}% | "
+             f"poll {POLL_INTERVAL}s | NY-only {NY_SESSION_ONLY} | DRY_RUN {DRY_RUN}")
     log.info("═" * 60)
 
     if not mt5.initialize():
         log.error(f"MT5 verbinding mislukt: {mt5.last_error()}")
-        log.error("Zorg dat MetaTrader 5 open + ingelogd staat en herstart dit script.")
         sys.exit(1)
 
     info = mt5.account_info()
@@ -386,20 +563,39 @@ def main():
 
     symbol = resolve_symbol()
     if symbol is None:
-        log.error(f"Geen bruikbaar BTC-symbool (geprobeerd: {SYMBOL_CANDIDATES}) — gestopt.")
+        log.error(f"Geen bruikbaar symbool ({SYMBOL_CANDIDATES}) — gestopt.")
         sys.exit(1)
     s = mt5.symbol_info(symbol)
-    log.info(f"Symbool: {symbol} | digits={s.digits} | vol_min={s.volume_min} step={s.volume_step} | spread={s.spread}pts")
+    log.info(f"Symbool: {symbol} | digits {s.digits} | vol_min {s.volume_min} step {s.volume_step} | spread {s.spread}pts")
 
-    last_hb = 0.0
+    st = load_state()
+    st.setdefault("phase", "IDLE")
+    save_state(st)
+
+    last_analyse = 0.0
     while True:
         try:
-            evaluate_and_trade(symbol)
-            now = time.time()
-            if now - last_hb >= HEARTBEAT_EVERY:
-                pos = open_pos(symbol)
-                log.info(f"heartbeat — open posities (Strategy B): {len(pos)}")
-                last_hb = now
+            phase = st.get("phase", "IDLE")
+            # sync: als state MANAGING/PENDING zegt maar er is niks meer -> corrigeer
+            if phase == "PENDING" and not our_orders(symbol) and not our_positions(symbol):
+                st["phase"] = "IDLE"; save_state(st); phase = "IDLE"
+            if phase == "MANAGING" and not our_positions(symbol):
+                manage_position(symbol, st); phase = st.get("phase", "IDLE")
+
+            if phase == "IDLE":
+                if not our_positions(symbol) and not our_orders(symbol):
+                    try_new_setup(symbol, st)
+                else:
+                    st["phase"] = "MANAGING" if our_positions(symbol) else "PENDING"
+                    save_state(st)
+            elif phase == "PENDING":
+                manage_pending(symbol, st)
+            elif phase == "MANAGING":
+                manage_position(symbol, st)
+
+            if time.time() - last_analyse >= ANALYSE_EVERY:
+                write_analyse(symbol, st)
+                last_analyse = time.time()
         except KeyboardInterrupt:
             log.info("Gestopt door gebruiker")
             mt5.shutdown()
