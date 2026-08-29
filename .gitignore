@@ -1,4 +1,6 @@
 mt5_trader.log
 mt5_state.json
+strategy_b.log
+strategy_b_state.json
 creds.json
 __pycache__/
