@@ -269,15 +269,28 @@ def in_ny_session():
     return 13 * 60 + 30 <= m <= 16 * 60
 
 
-def send(req, what):
+# retcodes waarop het zin heeft opnieuw te proberen (timeout / geen prijs / requote / verbinding)
+_RETRY_CODES = {10012, 10021, 10024, 10004, 10018, 10031}
+
+
+def send(req, what, retries=3):
     if DRY_RUN:
         log.info(f"DRY_RUN — {what} niet verstuurd: {req}")
         return None
-    res = mt5.order_send(req)
-    if res is None:
-        log.error(f"{what}: order_send None — {mt5.last_error()}")
-    elif res.retcode != mt5.TRADE_RETCODE_DONE:
-        log.error(f"{what}: code={res.retcode} — {res.comment}")
+    res = None
+    for attempt in range(retries + 1):
+        res = mt5.order_send(req)
+        if res is None:
+            log.warning(f"{what}: order_send None — {mt5.last_error()} (poging {attempt + 1}/{retries + 1})")
+        elif res.retcode == mt5.TRADE_RETCODE_DONE:
+            return res
+        elif res.retcode in _RETRY_CODES:
+            log.warning(f"{what}: code={res.retcode} ({res.comment}) — retry {attempt + 1}/{retries}")
+        else:
+            log.error(f"{what}: code={res.retcode} — {res.comment}")
+            return res
+        time.sleep(2)
+    log.error(f"{what}: opgegeven na {retries + 1} pogingen (laatste: {getattr(res, 'retcode', None)})")
     return res
 
 
@@ -361,9 +374,11 @@ def try_new_setup(symbol, st):
         return
 
     d = sym.digits
+    tp_1to4  = entry + RR * risk if ch['dir'] == 'LONG' else entry - RR * risk
     tp_runner = entry + RUNNER_RR * risk if ch['dir'] == 'LONG' else entry - RUNNER_RR * risk
     htf = htf_fvg_target(m15, ch['dir'], entry)
-    tp0 = htf if htf else tp_runner
+    # begin-TP = runner (8R) als vangnet; de 1:4-partial en het HTF-doel worden in manage_position beheerd
+    tp0 = tp_runner
 
     req = {
         "action": mt5.TRADE_ACTION_PENDING, "symbol": symbol, "volume": lot, "type": order_type,
@@ -372,19 +387,30 @@ def try_new_setup(symbol, st):
         "type_filling": filling_mode(symbol),
     }
     log.info(f"SETUP {ch['dir']} | bias {bias} | FVG {fvg['bot']:.{d}f}-{fvg['top']:.{d}f} mid {fvg['mid']:.{d}f} | "
-             f"LIMIT {entry:.{d}f} | SL {sl_price:.{d}f} ({pct*100:.2f}%) | 1:4 @ {entry + (RR*risk if ch['dir']=='LONG' else -RR*risk):.{d}f} | "
-             f"TP0 {tp0:.{d}f} {'(HTF-FVG)' if htf else '(runner)'} | lot {lot} risico≈{risico:.2f}")
+             f"LIMIT {entry:.{d}f} | SL {sl_price:.{d}f} ({pct*100:.2f}%) | 1:4 @ {tp_1to4:.{d}f} | "
+             f"TP0 {tp0:.{d}f} (runner) | HTF {('%.*f' % (d, htf)) if htf else 'geen'} | lot {lot} risico≈{risico:.2f}")
     res = send(req, "pending")
     st["last_choch"] = ch_key
+
+    ticket = None
     if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE:
+        ticket = res.order
+        log.info(f"PENDING geplaatst — ticket {ticket}")
+    else:
+        # kan tóch geland zijn ondanks timeout (10012) — check de orderlijst
+        landed = our_orders(symbol)
+        if landed:
+            ticket = landed[0].ticket
+            log.warning(f"PENDING tóch aanwezig na fout — adopteer ticket {ticket}")
+
+    if ticket is not None:
         st.update({
-            "phase": "PENDING", "pending_ticket": res.order, "pending_since": int(time.time()),
+            "phase": "PENDING", "pending_ticket": ticket, "pending_since": int(time.time()),
             "dir": ch['dir'], "entry_price": float(entry), "sl0": float(sl_price), "risk": float(risk),
-            "lot": float(lot), "tp_1to4": float(entry + (RR*risk if ch['dir'] == 'LONG' else -RR*risk)),
+            "lot": float(lot), "tp_1to4": float(tp_1to4),
             "tp_runner": float(tp_runner), "htf_target": float(htf) if htf else None,
             "partial_done": False, "be_done": False,
         })
-        log.info(f"PENDING geplaatst — ticket {res.order}")
     save_state(st)
 
 
