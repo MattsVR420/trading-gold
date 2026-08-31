@@ -284,6 +284,8 @@ def send(req, what, retries=3):
             log.warning(f"{what}: order_send None — {mt5.last_error()} (poging {attempt + 1}/{retries + 1})")
         elif res.retcode == mt5.TRADE_RETCODE_DONE:
             return res
+        elif res.retcode == 10025:  # NO_CHANGES — geen echte fout, gevraagde SL/TP = huidige
+            return res
         elif res.retcode in _RETRY_CODES:
             log.warning(f"{what}: code={res.retcode} ({res.comment}) — retry {attempt + 1}/{retries}")
         else:
@@ -500,34 +502,48 @@ def manage_position(symbol, st):
         st["partial_done"] = True
         save_state(st)
 
-    # 2) break-even bij nieuwe BOS in trade-richting (of zodra 1:4 geraakt)
+    # 2+3) stop/target-beheer — één SLTP-call per tick, SL alleen ooit verbeteren,
+    #      en na break-even nooit meer terug voorbij break-even.
+    be_price = entry + BE_BUFFER_ATR * a1 if is_long else entry - BE_BUFFER_ATR * a1
+    cur_sl, cur_tp = float(pos.sl), float(pos.tp)
+    new_sl, new_tp = cur_sl, cur_tp
+    reasons = []
+
     if not st.get("be_done"):
         bos = new_bos_since(m1['time'], m1['high'], m1['low'], m1['close'], st["entry_ts"], st["dir"], SWING_LB_M1)
         if bos or st.get("partial_done"):
-            be = entry + BE_BUFFER_ATR * a1 if is_long else entry - BE_BUFFER_ATR * a1
-            if (is_long and be > pos.sl) or (not is_long and be < pos.sl) or pos.sl == 0:
-                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
-                      "sl": round(float(be), d), "tp": pos.tp}, "SL->BE")
-                log.info(f"SL -> break-even ({be:.{d}f})  [{'nieuwe BOS' if bos else 'na 1:4'}]")
+            new_sl = be_price
             st["be_done"] = True
+            reasons.append(f"BE ({'nieuwe BOS' if bos else 'na 1:4'})")
             save_state(st)
 
-    # 3) na BE: structuur-trail + HTF-doel bijwerken
     if st.get("be_done"):
-        new_sl = struct_trail_sl(m1, st["entry_ts"], st["dir"], SWING_LB_M1, TRAIL_BUFFER_ATR * a1)
-        if new_sl and ((is_long and new_sl > pos.sl) or (not is_long and new_sl < pos.sl)):
-            # nooit voorbij de huidige prijs trailen
-            if (is_long and new_sl < price) or (not is_long and new_sl > price):
-                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
-                      "sl": round(float(new_sl), d), "tp": pos.tp}, "trail")
-                log.info(f"trail SL -> {new_sl:.{d}f}")
+        # structuur-trail: laatste tegengestelde M1-swing ± buffer, met vloer op break-even
+        trail = struct_trail_sl(m1, st["entry_ts"], st["dir"], SWING_LB_M1, TRAIL_BUFFER_ATR * a1)
+        cand = be_price
+        if trail is not None:
+            cand = max(be_price, trail) if is_long else min(be_price, trail)
+        # nooit voorbij de huidige prijs
+        if is_long:
+            cand = min(cand, price - 0.1 * a1)
+            if cand > new_sl + 1e-6:
+                new_sl = cand; reasons.append("trail")
+        else:
+            cand = max(cand, price + 0.1 * a1)
+            if cand < new_sl - 1e-6:
+                new_sl = cand; reasons.append("trail")
+        # TP naar dichtstbijzijnde HTF-FVG in trade-richting
         m15 = rates(symbol, mt5.TIMEFRAME_M15, 240)
         if m15 is not None:
             htf = htf_fvg_target(m15, st["dir"], price)
-            if htf and abs(htf - pos.tp) > a1:
-                send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
-                      "sl": pos.sl, "tp": round(float(htf), d)}, "TP->HTF")
-                log.info(f"TP -> HTF-FVG {htf:.{d}f}")
+            if htf and abs(htf - cur_tp) > a1:
+                new_tp = float(htf); reasons.append(f"TP->HTF {htf:.{d}f}")
+
+    if round(new_sl, d) != round(cur_sl, d) or round(new_tp, d) != round(cur_tp, d):
+        r = send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket,
+                  "sl": round(new_sl, d), "tp": round(new_tp, d)}, "SLTP")
+        if r is not None and r.retcode == mt5.TRADE_RETCODE_DONE:
+            log.info(f"SLTP: SL {new_sl:.{d}f} TP {new_tp:.{d}f}  [{', '.join(reasons)}]")
 
 
 def write_analyse(symbol, st):
