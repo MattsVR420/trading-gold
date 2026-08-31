@@ -41,7 +41,7 @@ ENTRY_OFFSET_FRAC = 0.15     # limit dit deel van de FVG-hoogte vóór de midpoi
 SL_BUFFER_ATR     = 0.5      # SL = anker-swing ± dit * ATR(14)
 BE_BUFFER_ATR     = 0.10     # break-even net voorbij entry (spread-buffer)
 TRAIL_BUFFER_ATR  = 0.30     # structuur-trail: laatste tegengestelde M1-swing ± dit * ATR
-MIN_SL_PCT        = 0.0015   # risk-afstand fractie van prijs, ondergrens
+MIN_SL_PCT        = 0.0005   # risk-afstand fractie van prijs, ondergrens
 MAX_SL_PCT        = 0.02     # ... bovengrens
 PENDING_EXPIRY_MIN = 45      # onvervulde limit-order na X min annuleren
 INVALID_ATR       = 2.0      # limit annuleren als prijs > dit * ATR van entry wegloopt (gemist)
