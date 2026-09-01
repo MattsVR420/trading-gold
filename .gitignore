@@ -4,3 +4,4 @@ strategy_b.log
 strategy_b_state.json
 creds.json
 __pycache__/
+strategy_b_trades.csv
