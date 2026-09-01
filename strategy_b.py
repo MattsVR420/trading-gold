@@ -741,8 +741,12 @@ def manage_position(symbol, st):
             st["p2_done"] = True
             save_state(st)
 
-    # stop-beheer — één SLTP-call per tick, SL alleen verbeteren, na BE nooit terug voorbij BE
+    # stop-beheer — één SLTP-call per tick, SL alleen verbeteren, na BE nooit terug voorbij BE.
+    # Minimale afstand tot de prijs = broker-stops-level + spread + ATR-buffer (anders code 10016).
     be_price = entry + BE_BUFFER_ATR * a1 if is_long else entry - BE_BUFFER_ATR * a1
+    spread_price = (sym.spread or 0) * (sym.point or 0.01)
+    min_gap = max((getattr(sym, "trade_stops_level", 0) or 0) * (sym.point or 0.01),
+                  3 * spread_price, 0.5 * a1)
     cur_sl, cur_tp = float(pos.sl), float(pos.tp)
     new_sl, new_tp = cur_sl, cur_tp
     reasons = []
@@ -751,24 +755,27 @@ def manage_position(symbol, st):
         m5 = rates(symbol, mt5.TIMEFRAME_M5, 200)
         m5bos = m5 is not None and bos_since(m5['time'], m5['high'], m5['low'], m5['close'],
                                              st["entry_ts"], st["dir"], SWING_LB_M5)
-        if r_now >= BE_AT_R or m5bos:
+        # BE alleen als we ook echt genoeg ruimte tot de prijs hebben
+        be_ok = (is_long and be_price <= price - min_gap) or (not is_long and be_price >= price + min_gap)
+        if (r_now >= BE_AT_R or m5bos) and be_ok:
             new_sl = be_price
             st["be_done"] = True
             reasons.append(f"BE ({'M5-BOS' if m5bos else f'+{BE_AT_R:g}R'})")
             save_state(st)
 
-    if st.get("be_done"):
+    # trailen alleen als de positie echt in winst is (nooit een verliezer richting de prijs trekken)
+    if st.get("be_done") and r_now >= BE_AT_R:
         trail = struct_trail_sl(m1, st["entry_ts"], st["dir"], SWING_LB_M1, TRAIL_BUFFER_ATR * a1)
         cand = be_price
         if trail is not None:
             cand = max(be_price, trail) if is_long else min(be_price, trail)
         if is_long:
-            cand = min(cand, price - 0.1 * a1)
-            if cand > new_sl + 1e-6:
+            cand = min(cand, price - min_gap)
+            if cand > new_sl + min_gap * 0.25:
                 new_sl = cand; reasons.append("trail")
         else:
-            cand = max(cand, price + 0.1 * a1)
-            if cand < new_sl - 1e-6:
+            cand = max(cand, price + min_gap)
+            if cand < new_sl - min_gap * 0.25:
                 new_sl = cand; reasons.append("trail")
 
     if round(new_sl, d) != round(cur_sl, d) or round(new_tp, d) != round(cur_tp, d):
@@ -866,6 +873,14 @@ def main():
 
     st = load_state()
     st.setdefault("phase", "IDLE")
+    # bij opstart: state altijd afstemmen op de werkelijkheid (herstart / oude state-vorm / extern geplaatst)
+    if our_positions(symbol) or our_orders(symbol):
+        if st.get("phase") not in ("PENDING", "MANAGING") or "risk_eur" not in st:
+            adopt_existing(symbol, st)
+    elif st.get("phase") in ("PENDING", "MANAGING"):
+        for k in STATE_TRADE_KEYS:
+            st.pop(k, None)
+        st["phase"] = "IDLE"
     save_state(st)
 
     last_analyse = 0.0
