@@ -5,3 +5,5 @@ strategy_b_state.json
 creds.json
 __pycache__/
 strategy_b_trades.csv
+strategy_b_analyse.md
+backtest_b_trades.csv
