@@ -1,7 +1,7 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-09-03 05:59",
-    "prijs": 4433,
+    "tijdstip": "2026-09-03 06:28",
+    "prijs": 4424,
     "beslissing": "WACHT",
     "score": 0,
     "entry": null,
@@ -24,7 +24,7 @@
       "61.8": 4269.0,
       "78.6": 4134.0
     },
-    "chart": "charts/XAUUSD/2026-09-03_0559_XAUUSD.png",
+    "chart": "charts/XAUUSD/2026-09-03_0628_XAUUSD.png",
     "manipulatie": null,
     "manip_level": null,
     "reversal_confirmed": false,
@@ -41,6 +41,12 @@
       4468.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-09-03 06:28",
+        "prijs": 4424,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-09-03 05:59",
         "prijs": 4433,
@@ -154,15 +160,9 @@
         "prijs": 4392,
         "beslissing": "WACHT",
         "score": 0
-      },
-      {
-        "tijdstip": "2026-09-02 20:32",
-        "prijs": 4432,
-        "beslissing": "WACHT",
-        "score": 0
       }
     ]
   },
-  "last_wa_sent": "2026-09-03T05:59:50.627186+00:00",
-  "tijdstip": "2026-09-03 05:59"
+  "last_wa_sent": "2026-09-03T06:28:36.614774+00:00",
+  "tijdstip": "2026-09-03 06:28"
 }
