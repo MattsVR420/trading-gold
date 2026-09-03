@@ -443,6 +443,16 @@ STATE_TRADE_KEYS = ("pending_ticket", "pending_since", "dir", "entry_price", "sl
                     "position_ticket", "entry_ts", "entry_fill", "opened_at", "close_reason")
 
 
+def server_offset(symbol):
+    """Seconden dat de broker-servertijd vóórloopt op de UTC-epoch.
+    MT5-tijden (position.time, rates['time'], deal.time) zijn servertijd; time.time() is UTC.
+    Broker-offset is altijd een veelvoud van 15 min -> daarop afronden weg van meetruis."""
+    t = mt5.symbol_info_tick(symbol)
+    if not t or not t.time:
+        return 0.0
+    return round((t.time - time.time()) / 900.0) * 900.0
+
+
 def adopt_existing(symbol, st):
     """State reconstrueren voor een positie/order die al bestaat (herstart, of extern geplaatst)."""
     sym = mt5.symbol_info(symbol)
@@ -457,7 +467,7 @@ def adopt_existing(symbol, st):
         risk_eur = abs(lpl) * p.volume if lpl else risk * p.volume * (sym.trade_contract_size or 1.0)
         st.update({
             "phase": "MANAGING", "position_ticket": p.ticket, "dir": "LONG" if is_long else "SHORT",
-            "entry_ts": int(p.time), "opened_at": int(p.time), "entry_fill": entry, "sl0": sl,
+            "entry_ts": int(p.time), "opened_at": int(p.time - server_offset(symbol)), "entry_fill": entry, "sl0": sl,
             "risk": risk, "risk_eur": float(risk_eur), "lot": float(p.volume),
             "tp_runner": (entry + RUNNER_RR * risk) if is_long else (entry - RUNNER_RR * risk),
             "htf_target": float(p.tp) if p.tp else None,
@@ -678,8 +688,10 @@ def manage_position(symbol, st):
     pos_list = our_positions(symbol)
     if not pos_list:
         realized = 0.0
+        deal_times = []
         for dl in (mt5.history_deals_get(position=st.get("position_ticket", 0)) or []):
             realized += dl.profit + dl.swap + dl.commission
+            deal_times.append(dl.time)
         won = realized > 0
         st["wins"] = st.get("wins", 0) + (1 if won else 0)
         st["losses"] = st.get("losses", 0) + (0 if won else 1)
@@ -689,7 +701,12 @@ def manage_position(symbol, st):
         if not won:
             st["day_losses"] = st.get("day_losses", 0) + 1
         risk_eur = st.get("risk_eur", 0.0) or 1e-9
-        mins = (time.time() - st.get("opened_at", time.time())) / 60
+        # duur uit de deal-historie (open- en sluit-deal staan beide in servertijd -> offset valt weg);
+        # terugval op opened_at als er (nog) geen twee deals zijn
+        if len(deal_times) >= 2:
+            mins = (max(deal_times) - min(deal_times)) / 60
+        else:
+            mins = (time.time() - st.get("opened_at", time.time())) / 60
         log_trade_csv([datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
                        st.get("dir", "?"), round(st.get("entry_fill", 0), 2), round(st.get("sl0", 0), 2),
                        st.get("lot", 0), round(risk_eur, 2), round(realized, 2), round(realized / risk_eur, 2),
