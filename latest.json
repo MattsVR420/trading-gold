@@ -1,20 +1,20 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-09-09 04:12",
-    "prijs": 4372,
+    "tijdstip": "2026-09-09 04:41",
+    "prijs": 4379,
     "beslissing": "WACHT",
-    "score": 0,
+    "score": -2,
     "entry": null,
     "sl": null,
     "tp1": null,
     "tp2": null,
     "weekly_trend": "NEUTRAAL",
     "daily_trend": "BULLISH",
-    "h4_trend": "BEARISH",
-    "h1_trend": "NEUTRAAL",
-    "m30_trend": "NEUTRAAL",
-    "bos_h4": "BOS_BEARISH",
-    "bos_h1": "BOS_BEARISH",
+    "h4_trend": "NEUTRAAL",
+    "h1_trend": "BEARISH",
+    "m30_trend": "BEARISH",
+    "bos_h4": null,
+    "bos_h1": null,
     "fib": {
       "high": 4765.0,
       "low": 3962.0,
@@ -24,24 +24,30 @@
       "61.8": 4269.0,
       "78.6": 4134.0
     },
-    "chart": "charts/XAUUSD/2026-09-09_0412_XAUUSD.png",
-    "manipulatie": null,
-    "manip_level": null,
+    "chart": "charts/XAUUSD/2026-09-09_0441_XAUUSD.png",
+    "manipulatie": "BEARISH",
+    "manip_level": 4424.0,
     "reversal_confirmed": false,
     "entry_confirmed": false,
     "correlatie_label": "DXY",
-    "correlatie_trend": "NEUTRAAL",
+    "correlatie_trend": "BEARISH",
     "correlatie_ok": false,
     "liq_highs": [
-      4420.0,
-      4538.0,
-      4558.0
+      4424.0,
+      4489.0,
+      4538.0
     ],
     "liq_lows": [
-      4412.0,
-      4418.0
+      4381.0,
+      4414.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-09-09 04:41",
+        "prijs": 4379,
+        "beslissing": "WACHT",
+        "score": -2
+      },
       {
         "tijdstip": "2026-09-09 04:12",
         "prijs": 4372,
@@ -155,15 +161,9 @@
         "prijs": 4388,
         "beslissing": "WACHT",
         "score": 2
-      },
-      {
-        "tijdstip": "2026-09-08 17:18",
-        "prijs": 4398,
-        "beslissing": "WACHT",
-        "score": 4
       }
     ]
   },
-  "last_wa_sent": "2026-09-09T04:12:06.504811+00:00",
-  "tijdstip": "2026-09-09 04:12"
+  "last_wa_sent": "2026-09-09T04:41:34.234637+00:00",
+  "tijdstip": "2026-09-09 04:41"
 }
