@@ -1,9 +1,9 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-11-17 17:28",
-    "prijs": 3872,
+    "tijdstip": "2026-11-17 17:34",
+    "prijs": 3869,
     "beslissing": "WACHT",
-    "score": 2,
+    "score": 0,
     "entry": null,
     "sl": null,
     "tp1": null,
@@ -24,9 +24,9 @@
       "61.8": 4187.0,
       "78.6": 4032.0
     },
-    "chart": "charts/XAUUSD/2026-11-17_1728_XAUUSD.png",
-    "manipulatie": "BULLISH",
-    "manip_level": 3872.0,
+    "chart": "charts/XAUUSD/2026-11-17_1734_XAUUSD.png",
+    "manipulatie": null,
+    "manip_level": null,
     "reversal_confirmed": false,
     "entry_confirmed": false,
     "correlatie_label": "DXY",
@@ -45,6 +45,12 @@
       3872.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-11-17 17:34",
+        "prijs": 3869,
+        "beslissing": "WACHT",
+        "score": 0
+      },
       {
         "tijdstip": "2026-11-17 17:28",
         "prijs": 3872,
@@ -158,15 +164,9 @@
         "prijs": 3871,
         "beslissing": "WACHT",
         "score": -4
-      },
-      {
-        "tijdstip": "2026-11-17 15:20",
-        "prijs": 3858,
-        "beslissing": "WACHT",
-        "score": -4
       }
     ]
   },
-  "last_wa_sent": "2026-11-17T17:14:14.178416+00:00",
-  "tijdstip": "2026-11-17 17:28"
+  "last_wa_sent": "2026-11-17T17:34:35.326209+00:00",
+  "tijdstip": "2026-11-17 17:34"
 }
