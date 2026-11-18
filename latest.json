@@ -1,13 +1,13 @@
 {
   "XAUUSD": {
-    "tijdstip": "2026-11-18 08:19",
-    "prijs": 3763,
-    "beslissing": "WACHT",
-    "score": 2,
-    "entry": null,
-    "sl": null,
-    "tp1": null,
-    "tp2": null,
+    "tijdstip": "2026-11-18 08:26",
+    "prijs": 3768,
+    "beslissing": "SHORT",
+    "score": -8,
+    "entry": 3768,
+    "sl": 3783,
+    "tp1": 3746,
+    "tp2": 3760,
     "weekly_trend": "BEARISH",
     "daily_trend": "BEARISH",
     "h4_trend": "BEARISH",
@@ -17,31 +17,37 @@
     "bos_h1": "BOS_BEARISH",
     "fib": {
       "high": 4755.0,
-      "low": 3766.0,
-      "23.6": 4522.0,
-      "38.2": 4377.0,
-      "50.0": 4261.0,
-      "61.8": 4144.0,
-      "78.6": 3978.0
+      "low": 3760.0,
+      "23.6": 4520.0,
+      "38.2": 4375.0,
+      "50.0": 4258.0,
+      "61.8": 4140.0,
+      "78.6": 3973.0
     },
-    "chart": "charts/XAUUSD/2026-11-18_0819_XAUUSD.png",
-    "manipulatie": "BULLISH",
-    "manip_level": 3768.0,
-    "reversal_confirmed": false,
-    "entry_confirmed": false,
+    "chart": "charts/XAUUSD/2026-11-18_0826_XAUUSD.png",
+    "manipulatie": "BEARISH",
+    "manip_level": 3776.0,
+    "reversal_confirmed": true,
+    "entry_confirmed": true,
     "correlatie_label": "DXY",
     "correlatie_trend": "BULLISH",
-    "correlatie_ok": false,
+    "correlatie_ok": true,
     "liq_highs": [
       3776.0,
       3800.0,
       3894.0
     ],
     "liq_lows": [
-      3766.0,
-      3768.0
+      3760.0,
+      3766.0
     ],
     "history": [
+      {
+        "tijdstip": "2026-11-18 08:26",
+        "prijs": 3768,
+        "beslissing": "SHORT",
+        "score": -8
+      },
       {
         "tijdstip": "2026-11-18 08:19",
         "prijs": 3763,
@@ -155,15 +161,9 @@
         "prijs": 3790,
         "beslissing": "WACHT",
         "score": 2
-      },
-      {
-        "tijdstip": "2026-11-18 06:13",
-        "prijs": 3788,
-        "beslissing": "WACHT",
-        "score": 2
       }
     ]
   },
-  "last_wa_sent": "2026-11-18T08:19:38.350052+00:00",
-  "tijdstip": "2026-11-18 08:19"
+  "last_wa_sent": "2026-11-18T08:26:28.279151+00:00",
+  "tijdstip": "2026-11-18 08:26"
 }
